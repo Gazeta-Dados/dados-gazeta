@@ -2,7 +2,7 @@ name: Atualizar dados e publicar
 
 on:
   schedule:
-    - cron: '17 * * * *'   # de hora em hora (horário UTC); cada fonte segue a agenda de fontes.yml
+    - cron: '17 * * * *'   # de hora em hora (horário UTC); cada fonte segue a própria agenda (pasta fontes/)
   workflow_dispatch:
     inputs:
       forcar:
@@ -10,7 +10,7 @@ on:
         type: boolean
         default: false
       fonte:
-        description: 'Somente esta fonte (id em fontes.yml)'
+        description: 'Somente esta fonte (o id dela, nos arquivos da pasta fontes/)'
         required: false
       republicar:
         description: 'Republicar os sites mesmo sem mudança'
@@ -35,35 +35,54 @@ jobs:
       publicar: ${{ steps.run.outputs.site_mudou == 'true' || inputs.republicar == true }}
     env:
       TZ: America/Sao_Paulo
+      # Modo completo só quando os segredos existem; sem eles, modo simplificado (arquivo único automacao/automacao.mjs)
+      MODO_COMPLETO: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' && secrets.APP_REPO_TOKEN != '' && vars.APP_REPO != '' }}
     steps:
       - name: Repositório de dados
         uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # ── Modo simplificado: coleta, histórico, tratamento, JSON final e avisos ──
+      - name: Coletar e tratar (modo simplificado)
+        if: env.MODO_COMPLETO != 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FORCAR: ${{ inputs.forcar }}
+          FONTE: ${{ inputs.fonte }}
+        run: |
+          ARGS="--dados $GITHUB_WORKSPACE"
+          if [ "$FORCAR" = "true" ]; then ARGS="$ARGS --forcar"; fi
+          if [ -n "$FONTE" ]; then ARGS="$ARGS --fonte $FONTE"; fi
+          node automacao/automacao.mjs $ARGS
+
+      # ── Modo completo: também atualiza as bases do app e publica os sites ──
       - name: Código do app (repositório privado)
+        if: env.MODO_COMPLETO == 'true'
         uses: actions/checkout@v4
         with:
           repository: ${{ vars.APP_REPO }}
           token: ${{ secrets.APP_REPO_TOKEN }}
           path: app
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
       - name: Instalar dependências do app
+        if: env.MODO_COMPLETO == 'true'
         working-directory: app
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
       - name: Credenciais do Firebase
+        if: env.MODO_COMPLETO == 'true'
         env:
           SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
-          if [ -z "$SA" ]; then echo "::error::Segredo FIREBASE_SERVICE_ACCOUNT não configurado (ver README)."; exit 1; fi
           printf '%s' "$SA" > "$RUNNER_TEMP/firebase-sa.json"
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-sa.json" >> "$GITHUB_ENV"
 
-      - name: Coletar, tratar, sincronizar e gerar os sites
+      - name: Coletar, tratar, sincronizar e gerar os sites (modo completo)
         id: run
+        if: env.MODO_COMPLETO == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           FORCAR: ${{ inputs.forcar }}
