@@ -1,0 +1,120 @@
+name: Atualizar dados e publicar
+
+on:
+  schedule:
+    - cron: '17 * * * *'   # de hora em hora (horário UTC); cada fonte segue a agenda de fontes.yml
+  workflow_dispatch:
+    inputs:
+      forcar:
+        description: 'Verificar todas as fontes agora (ignora a agenda)'
+        type: boolean
+        default: false
+      fonte:
+        description: 'Somente esta fonte (id em fontes.yml)'
+        required: false
+      republicar:
+        description: 'Republicar os sites mesmo sem mudança'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write     # gravar bruto/, final/ e estado/
+  issues: write       # avisos
+  pages: write
+  id-token: write
+
+concurrency:
+  group: automacao-dados
+  cancel-in-progress: false
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      publicar: ${{ steps.run.outputs.site_mudou == 'true' || inputs.republicar == true }}
+    env:
+      TZ: America/Sao_Paulo
+    steps:
+      - name: Repositório de dados
+        uses: actions/checkout@v4
+
+      - name: Código do app (repositório privado)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.APP_REPO }}
+          token: ${{ secrets.APP_REPO_TOKEN }}
+          path: app
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar dependências do app
+        working-directory: app
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Credenciais do Firebase
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SA" ]; then echo "::error::Segredo FIREBASE_SERVICE_ACCOUNT não configurado (ver README)."; exit 1; fi
+          printf '%s' "$SA" > "$RUNNER_TEMP/firebase-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-sa.json" >> "$GITHUB_ENV"
+
+      - name: Coletar, tratar, sincronizar e gerar os sites
+        id: run
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FORCAR: ${{ inputs.forcar }}
+          FONTE: ${{ inputs.fonte }}
+        run: |
+          ARGS="--dados $GITHUB_WORKSPACE"
+          if [ "$FORCAR" = "true" ]; then ARGS="$ARGS --forcar"; fi
+          if [ -n "$FONTE" ]; then ARGS="$ARGS --fonte $FONTE"; fi
+          cd app && npx tsx automation/run.ts $ARGS
+
+      - name: Apagar credenciais
+        if: always()
+        run: rm -f "$RUNNER_TEMP/firebase-sa.json"
+
+      - name: Gravar bruto, final e estado no repositório
+        run: |
+          git config user.name "automacao-dados"
+          git config user.email "automacao-dados@users.noreply.github.com"
+          git add bruto final estado referencias 2>/dev/null || true
+          if git diff --cached --quiet; then echo "Nada novo para gravar."; else
+            git commit -m "Dados atualizados em $(date '+%d/%m/%Y %H:%M')"
+            git push
+          fi
+
+      - name: Preparar site para o GitHub Pages
+        if: steps.run.outputs.site_mudou == 'true' || inputs.republicar == true
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Enviar ao servidor próprio (opcional)
+        if: (steps.run.outputs.site_mudou == 'true' || inputs.republicar == true) && vars.DEPLOY_HOST != ''
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ vars.DEPLOY_HOST }}
+          PORTA: ${{ vars.DEPLOY_PORT || '22' }}
+          USUARIO: ${{ vars.DEPLOY_USER }}
+          DESTINO: ${{ vars.DEPLOY_PATH }}
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          ssh-keyscan -p "$PORTA" "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          rsync -az --delete --exclude index.html --exclude .nojekyll -e "ssh -i ~/.ssh/deploy -p $PORTA" site/ "$USUARIO@$HOST:$DESTINO/"
+          rm -f ~/.ssh/deploy
+
+  publicar-pages:
+    needs: atualizar
+    if: needs.atualizar.outputs.publicar == 'true' && vars.GITHUB_PAGES != 'false'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
