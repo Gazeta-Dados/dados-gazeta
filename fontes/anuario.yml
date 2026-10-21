@@ -1,0 +1,93 @@
+# ════════════════════════════════════════════════════════════════════════════
+# FONTES DO PROJETO "anuario"
+# Cada arquivo desta pasta (fontes/) é um projeto: o nome do arquivo vira o nome
+# do projeto e das pastas de dados (final/anuario/, bruto/anuario/, entrada/anuario/).
+# Para criar outro projeto, copie este arquivo com outro nome (ex.: eleicoes-2026.yml).
+# Os "id" das fontes precisam ser únicos em todos os arquivos.
+#
+# A automação roda de hora em hora e verifica cada fonte NA AGENDA DELA
+# (horário de Brasília). Edite pelo próprio GitHub (ícone de lápis). Para testar:
+# Actions → "Atualizar dados e publicar" → Run workflow → marque "forcar".
+# ════════════════════════════════════════════════════════════════════════════
+
+fontes:
+
+  # ── Receitas do Estado (Portal da Transparência / dados.es.gov.br) ────────
+  # Conjunto CKAN: https://dados.es.gov.br/dataset/portal-da-transparencia-receitas
+  # Fica desativado até conferirmos os nomes das colunas (ver "tratamento" abaixo).
+  - id: receitas-es
+    nome: Receitas do Estado do Espírito Santo
+    ativo: false
+    ckan:
+      portal: https://dados.es.gov.br
+      conjunto: portal-da-transparencia-receitas
+      recurso: receitas                # parte do nome dos arquivos (ex.: "Receitas 2026")
+      formato: csv
+      combinar: true                   # junta todos os anos numa série só
+      ano_minimo: 2019                 # ignora arquivos anteriores a este ano
+    agenda:
+      frequencia: diaria               # o portal costuma atualizar o ano corrente com frequência
+      hora: "06:00"
+    max_dias_sem_novidade: 45
+    dataset_id: COLE-AQUI-O-ID-DA-BASE # no app: Bases → "Versões e edições" (o ID aparece no topo)
+    fonte_credito: "Portal da Transparência do Governo do Estado do Espírito Santo"
+    colunas_tempo: { ano: ano, mes: mes }   # para o selo "Dados até…"
+    tratamento:
+      # O arquivo tem 56 colunas e uma linha por lançamento. Guardamos o essencial e somamos por mês.
+      renomear:
+        Ano: ano
+        Mes: mes
+        UnidadeGestora: unidade_gestora        # órgão ou fundo que arrecadou
+        CategoriaEconomica: categoria_economica # receitas correntes / de capital
+        Origem: origem                         # ex.: impostos, taxas; receita patrimonial
+        Especie: especie                       # ex.: taxas, valores mobiliários
+        PrevistaBruta: prevista_bruta
+        PrevistaDeducao: prevista_deducao
+        PrevistaLiquida: prevista_liquida
+        ArrecadadaBruta: arrecadada_bruta
+        ArrecadadaDeducao: arrecadada_deducao
+        ArrecadadaLiquida: arrecadada_liquida
+        RecolhidaBruta: recolhida_bruta
+      numeros: [prevista_bruta, prevista_deducao, prevista_liquida, arrecadada_bruta, arrecadada_deducao, arrecadada_liquida, recolhida_bruta]
+      inteiros: [ano, mes]
+      texto: [unidade_gestora, categoria_economica, origem, especie]   # tira espaços sobrando
+      descartar_mes_em_andamento: { ano: ano, mes: mes }  # o mês corrente ainda está incompleto
+      agrupar:
+        por: [ano, mes, unidade_gestora, categoria_economica, origem, especie]
+        somar: [prevista_bruta, prevista_deducao, prevista_liquida, arrecadada_bruta, arrecadada_deducao, arrecadada_liquida, recolhida_bruta]
+        contar: lancamentos
+      # ATENÇÃO EDITORIAL: cada lançamento preenche só a coluna do seu tipo (TipoArquivo, ex.: ARRECADADA-BRUTA).
+      # Antes de publicar totais, confira no dicionário de dados do portal qual medida usar
+      # (arrecadada bruta, deduções, líquida) e compare um total mensal com o relatório oficial da SEFAZ.
+
+  # ── MODELO para um arquivo direto (sem CKAN) ─────────────────────────────
+  # - id: exemplo-arquivo
+  #   nome: Exemplo
+  #   url: https://ENDERECO/arquivo{{ANO}}.csv     # marcadores: {{ANO}}, {{MES}}, {{DIA}}, {{ANO_ANTERIOR}}
+  #   agenda: { frequencia: mensal, dia_do_mes: 10, hora: "06:00", tentar_ate_novidade_dias: 7 }
+  #   tratamento:
+  #     municipio: { coluna: municipio, codigo_ibge: cod_ibge }   # nome padronizado + código do IBGE
+  #     # filtrar: { uf: ES }  ·  descartar_vazias: [valor]  ·  manter: [...]  ·  tipos: { cep: category }
+  #   # dados_pessoais: true   # LGPD: não grava nada neste repositório público (consulte o DPO)
+
+  # ── EXEMPLO: planilha preparada pela equipe (Excel ou CSV) ─────────────────
+  # 1. Envie a planilha pelo site do GitHub para a pasta entrada/anuario/
+  #    (Add file → Upload files), sempre com o MESMO nome de arquivo.
+  # 2. Quando houver versão nova, envie de novo com o mesmo nome: a automação
+  #    percebe a mudança na hora seguinte e faz o resto. O histórico de versões
+  #    fica no próprio GitHub (clique no arquivo → History).
+  # - id: pib-municipios
+  #   nome: PIB dos municípios
+  #   arquivo: entrada/anuario/pib-municipios.xlsx
+  #   planilha: Dados              # nome da aba (padrão: a primeira)
+  #   # linha_cabecalho: 3         # se o cabeçalho não for a primeira linha preenchida
+  #   agenda: { frequencia: horaria }   # para planilhas, verificar de hora em hora é o ideal
+  #   dataset_id: COLE-AQUI-O-ID-DA-BASE
+  #   tratamento:
+  #     renomear: { "Município": municipio, "Ano": ano, "PIB (R$ mil)": pib_mil }
+  #     municipio: { coluna: municipio, codigo_ibge: cod_ibge }
+  #     numeros: [pib_mil]
+
+publicacao:
+  github_pages: true                   # gera e publica os projetos marcados no app
+  # projetos: [ID-DO-PROJETO]          # opcional: publicar só estes (padrão: os marcados no app)
