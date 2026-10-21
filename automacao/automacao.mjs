@@ -5487,6 +5487,699 @@ var require_dist = __commonJS({
   }
 });
 
+// node_modules/papaparse/papaparse.js
+var require_papaparse = __commonJS({
+  "node_modules/papaparse/papaparse.js"(exports, module) {
+    (function(root, factory) {
+      typeof define == "function" && define.amd ? define([], factory) : typeof module == "object" && typeof exports < "u" ? module.exports = factory() : root.Papa = factory();
+    })(exports, function moduleFactory() {
+      "use strict";
+      var global2 = /* @__PURE__ */ (function() {
+        return typeof self < "u" ? self : typeof window < "u" ? window : typeof global2 < "u" ? global2 : {};
+      })();
+      function getWorkerBlob() {
+        var URL2 = global2.URL || global2.webkitURL || null, code = moduleFactory.toString();
+        return Papa3.BLOB_URL || (Papa3.BLOB_URL = URL2.createObjectURL(new Blob(["var global = (function() { if (typeof self !== 'undefined') { return self; } if (typeof window !== 'undefined') { return window; } if (typeof global !== 'undefined') { return global; } return {}; })(); global.IS_PAPA_WORKER=true; ", "(", code, ")();"], { type: "text/javascript" })));
+      }
+      var IS_WORKER = !global2.document && !!global2.postMessage, IS_PAPA_WORKER = global2.IS_PAPA_WORKER || !1, workers = {}, workerIdCounter = 0, Papa3 = {};
+      Papa3.parse = CsvToJson, Papa3.unparse = JsonToCsv, Papa3.RECORD_SEP = "", Papa3.UNIT_SEP = "", Papa3.BYTE_ORDER_MARK = "\uFEFF", Papa3.BAD_DELIMITERS = ["\r", `
+`, '"', Papa3.BYTE_ORDER_MARK], Papa3.WORKERS_SUPPORTED = !IS_WORKER && !!global2.Worker, Papa3.NODE_STREAM_INPUT = 1, Papa3.LocalChunkSize = 1024 * 1024 * 10, Papa3.RemoteChunkSize = 1024 * 1024 * 5, Papa3.DefaultDelimiter = ",", Papa3.Parser = Parser, Papa3.ParserHandle = ParserHandle, Papa3.NetworkStreamer = NetworkStreamer, Papa3.FileStreamer = FileStreamer, Papa3.StringStreamer = StringStreamer, Papa3.ReadableStreamStreamer = ReadableStreamStreamer, typeof PAPA_BROWSER_CONTEXT > "u" && (Papa3.DuplexStreamStreamer = DuplexStreamStreamer), IS_PAPA_WORKER && (global2.onmessage = workerThreadReceivedMessage);
+      function stripBom(string) {
+        return string.charCodeAt(0) === 65279 ? string.slice(1) : string;
+      }
+      function CsvToJson(_input, _config) {
+        _config = _config || {};
+        var dynamicTyping = _config.dynamicTyping || !1;
+        if (isFunction(dynamicTyping) && (_config.dynamicTypingFunction = dynamicTyping, dynamicTyping = {}), _config.dynamicTyping = dynamicTyping, _config.transform = isFunction(_config.transform) ? _config.transform : !1, _config.downloadTimeout !== void 0) {
+          var downloadTimeout = parseInt(_config.downloadTimeout);
+          if (isNaN(downloadTimeout))
+            throw new Error("Config downloadTimeout value (" + _config.downloadTimeout + ") not parsable by parseInt(val).");
+          _config.downloadTimeout = downloadTimeout;
+        }
+        if (_config.worker && Papa3.WORKERS_SUPPORTED) {
+          var w = newWorker();
+          w.userStep = _config.step, w.userChunk = _config.chunk, w.userComplete = _config.complete, w.userError = _config.error, _config.step = isFunction(_config.step), _config.chunk = isFunction(_config.chunk), _config.complete = isFunction(_config.complete), _config.error = isFunction(_config.error), delete _config.worker, w.postMessage({
+            input: _input,
+            config: _config,
+            workerId: w.id
+          });
+          return;
+        }
+        var streamer = null;
+        return _input === Papa3.NODE_STREAM_INPUT && typeof PAPA_BROWSER_CONTEXT > "u" ? (streamer = new DuplexStreamStreamer(_config), streamer.getStream()) : (typeof _input == "string" ? (_input = stripBom(_input), _config.download ? streamer = new NetworkStreamer(_config) : streamer = new StringStreamer(_config)) : _input.readable === !0 && isFunction(_input.read) && isFunction(_input.on) ? streamer = new ReadableStreamStreamer(_config) : (global2.File && _input instanceof File || _input instanceof Object) && (streamer = new FileStreamer(_config)), streamer.stream(_input));
+      }
+      function JsonToCsv(_input, _config) {
+        var _quotes = !1, _writeHeader = !0, _delimiter = ",", _newline = `\r
+`, _quoteChar = '"', _escapedQuote = _quoteChar + _quoteChar, _skipEmptyLines = !1, _columns = null, _escapeFormulae = !1;
+        unpackConfig();
+        var quoteCharRegex = new RegExp(escapeRegExp(_quoteChar), "g");
+        if (typeof _input == "string" && (_input = JSON.parse(_input)), Array.isArray(_input)) {
+          if (!_input.length || Array.isArray(_input[0]))
+            return serialize(null, _input, _skipEmptyLines);
+          if (typeof _input[0] == "object")
+            return serialize(_columns || Object.keys(_input[0]), _input, _skipEmptyLines);
+        } else if (typeof _input == "object")
+          return typeof _input.data == "string" && (_input.data = JSON.parse(_input.data)), Array.isArray(_input.data) && (_input.fields || (_input.fields = _input.meta && _input.meta.fields || _columns), _input.fields || (_input.fields = Array.isArray(_input.data[0]) ? _input.fields : typeof _input.data[0] == "object" ? Object.keys(_input.data[0]) : []), !Array.isArray(_input.data[0]) && typeof _input.data[0] != "object" && (_input.data = [_input.data])), serialize(_input.fields || [], _input.data || [], _skipEmptyLines);
+        throw new Error("Unable to serialize unrecognized input");
+        function unpackConfig() {
+          if (typeof _config == "object") {
+            if (typeof _config.delimiter == "string" && !Papa3.BAD_DELIMITERS.filter(function(value) {
+              return _config.delimiter.indexOf(value) !== -1;
+            }).length && (_delimiter = _config.delimiter), (typeof _config.quotes == "boolean" || typeof _config.quotes == "function" || Array.isArray(_config.quotes)) && (_quotes = _config.quotes), (typeof _config.skipEmptyLines == "boolean" || typeof _config.skipEmptyLines == "string") && (_skipEmptyLines = _config.skipEmptyLines), typeof _config.newline == "string" && (_newline = _config.newline), typeof _config.quoteChar == "string" && (_quoteChar = _config.quoteChar, _escapedQuote = _quoteChar + _quoteChar), typeof _config.header == "boolean" && (_writeHeader = _config.header), Array.isArray(_config.columns)) {
+              if (_config.columns.length === 0) throw new Error("Option columns is empty");
+              _columns = _config.columns;
+            }
+            _config.escapeChar !== void 0 && (_escapedQuote = _config.escapeChar + _quoteChar), _config.escapeFormulae instanceof RegExp ? _escapeFormulae = _config.escapeFormulae : typeof _config.escapeFormulae == "boolean" && _config.escapeFormulae && (_escapeFormulae = /^[=+\-@\t\r].*$/);
+          }
+        }
+        function serialize(fields, data, skipEmptyLines) {
+          var csv = "";
+          typeof fields == "string" && (fields = JSON.parse(fields)), typeof data == "string" && (data = JSON.parse(data));
+          var hasHeader = Array.isArray(fields) && fields.length > 0, dataKeyedByField = !Array.isArray(data[0]);
+          if (hasHeader && _writeHeader) {
+            for (var i = 0; i < fields.length; i++)
+              i > 0 && (csv += _delimiter), csv += safe(fields[i], i);
+            data.length > 0 && (csv += _newline);
+          }
+          for (var row = 0; row < data.length; row++) {
+            var maxCol = hasHeader ? fields.length : data[row].length, emptyLine = !1, nullLine = hasHeader ? Object.keys(data[row]).length === 0 : data[row].length === 0;
+            if (skipEmptyLines && !hasHeader && (emptyLine = skipEmptyLines === "greedy" ? data[row].join("").trim() === "" : data[row].length === 1 && data[row][0].length === 0), skipEmptyLines === "greedy" && hasHeader) {
+              for (var line = [], c = 0; c < maxCol; c++) {
+                var cx = dataKeyedByField ? fields[c] : c;
+                line.push(data[row][cx]);
+              }
+              emptyLine = line.join("").trim() === "";
+            }
+            if (!emptyLine) {
+              for (var col = 0; col < maxCol; col++) {
+                col > 0 && !nullLine && (csv += _delimiter);
+                var colIdx = hasHeader && dataKeyedByField ? fields[col] : col;
+                csv += safe(data[row][colIdx], col);
+              }
+              row < data.length - 1 && (!skipEmptyLines || maxCol > 0 && !nullLine) && (csv += _newline);
+            }
+          }
+          return csv;
+        }
+        function safe(str, col) {
+          if (typeof str > "u" || str === null)
+            return "";
+          if (str.constructor === Date)
+            return isNaN(str.getTime()) ? "" : str.toISOString();
+          var needsQuotes = !1;
+          _escapeFormulae && typeof str == "string" && _escapeFormulae.test(str) && (str = "'" + str, needsQuotes = !0);
+          var strValue = str.toString(), escapedQuoteStr = strValue.replace(quoteCharRegex, _escapedQuote);
+          return needsQuotes = needsQuotes || _quotes === !0 || typeof _quotes == "function" && _quotes(str, col) || Array.isArray(_quotes) && _quotes[col] || hasAny(escapedQuoteStr, Papa3.BAD_DELIMITERS) || escapedQuoteStr.indexOf(_delimiter) > -1 || strValue.indexOf(_quoteChar) > -1 || escapedQuoteStr.charAt(0) === " " || escapedQuoteStr.charAt(escapedQuoteStr.length - 1) === " ", needsQuotes ? _quoteChar + escapedQuoteStr + _quoteChar : escapedQuoteStr;
+        }
+        function hasAny(str, substrings) {
+          for (var i = 0; i < substrings.length; i++)
+            if (str.indexOf(substrings[i]) > -1)
+              return !0;
+          return !1;
+        }
+      }
+      function ChunkStreamer(config) {
+        this._handle = null, this._finished = !1, this._completed = !1, this._halted = !1, this._input = null, this._baseIndex = 0, this._partialLine = "", this._rowCount = 0, this._start = 0, this._nextChunk = null, this.isFirstChunk = !0, this._completeResults = {
+          data: [],
+          errors: [],
+          meta: {}
+        }, replaceConfig.call(this, config), this.parseChunk = function(chunk, isFakeChunk) {
+          let skipFirstNLines = parseInt(this._config.skipFirstNLines) || 0;
+          if (this.isFirstChunk && skipFirstNLines > 0) {
+            let _newline = this._config.newline;
+            if (!_newline) {
+              let quoteChar = this._config.quoteChar || '"';
+              _newline = this._handle.guessLineEndings(chunk, quoteChar);
+            }
+            chunk = [...chunk.split(_newline).slice(skipFirstNLines)].join(_newline);
+          }
+          if (this.isFirstChunk && isFunction(this._config.beforeFirstChunk)) {
+            var modifiedChunk = this._config.beforeFirstChunk(chunk);
+            modifiedChunk !== void 0 && (chunk = modifiedChunk);
+          }
+          this.isFirstChunk = !1, this._halted = !1;
+          var aggregate = this._partialLine + chunk;
+          this._partialLine = "";
+          var results = this._handle.parse(aggregate, this._baseIndex, !this._finished);
+          if (this._handle.paused() || this._handle.aborted()) {
+            this._halted = !0;
+            return;
+          }
+          var lastIndex = results.meta.cursor;
+          this._finished || (this._partialLine = aggregate.substring(lastIndex - this._baseIndex), this._baseIndex = lastIndex), results && results.data && (this._rowCount += results.data.length);
+          var finishedIncludingPreview = this._finished || this._config.preview && this._rowCount >= this._config.preview;
+          if (IS_PAPA_WORKER)
+            global2.postMessage({
+              results,
+              workerId: Papa3.WORKER_ID,
+              finished: finishedIncludingPreview
+            });
+          else if (isFunction(this._config.chunk) && !isFakeChunk) {
+            if (this._config.chunk(results, this._handle), this._handle.paused() || this._handle.aborted()) {
+              this._halted = !0;
+              return;
+            }
+            results = void 0, this._completeResults = void 0;
+          }
+          return !this._config.step && !this._config.chunk && (this._completeResults.data = this._completeResults.data.concat(results.data), this._completeResults.errors = this._completeResults.errors.concat(results.errors), this._completeResults.meta = results.meta), !this._completed && finishedIncludingPreview && isFunction(this._config.complete) && (!results || !results.meta.aborted) && (this._config.complete(this._completeResults, this._input), this._completed = !0), !finishedIncludingPreview && (!results || !results.meta.paused) && this._nextChunk(), results;
+        }, this._sendError = function(error) {
+          isFunction(this._config.error) ? this._config.error(error) : IS_PAPA_WORKER && this._config.error && global2.postMessage({
+            workerId: Papa3.WORKER_ID,
+            error,
+            finished: !1
+          });
+        };
+        function replaceConfig(config2) {
+          var configCopy = copy(config2);
+          configCopy.chunkSize = parseInt(configCopy.chunkSize), !config2.step && !config2.chunk && (configCopy.chunkSize = null), this._handle = new ParserHandle(configCopy), this._handle.streamer = this, this._config = configCopy;
+        }
+      }
+      function NetworkStreamer(config) {
+        config = config || {}, config.chunkSize || (config.chunkSize = Papa3.RemoteChunkSize), ChunkStreamer.call(this, config);
+        var xhr;
+        IS_WORKER ? this._nextChunk = function() {
+          this._readChunk(), this._chunkLoaded();
+        } : this._nextChunk = function() {
+          this._readChunk();
+        }, this.stream = function(url) {
+          this._input = url, this._nextChunk();
+        }, this._readChunk = function() {
+          if (this._finished) {
+            this._chunkLoaded();
+            return;
+          }
+          if (xhr = new XMLHttpRequest(), this._config.withCredentials && (xhr.withCredentials = this._config.withCredentials), IS_WORKER || (xhr.onload = bindFunction(this._chunkLoaded, this), xhr.onerror = bindFunction(this._chunkError, this)), xhr.ontimeout = bindFunction(this._chunkTimeout, this), xhr.open(this._config.downloadRequestBody ? "POST" : "GET", this._input, !IS_WORKER), this._config.downloadTimeout && !IS_WORKER && (xhr.timeout = this._config.downloadTimeout), this._config.downloadRequestHeaders) {
+            var headers = this._config.downloadRequestHeaders;
+            for (var headerName in headers)
+              xhr.setRequestHeader(headerName, headers[headerName]);
+          }
+          if (this._config.chunkSize) {
+            var end = this._start + this._config.chunkSize - 1;
+            xhr.setRequestHeader("Range", "bytes=" + this._start + "-" + end);
+          }
+          try {
+            xhr.send(this._config.downloadRequestBody);
+          } catch (err) {
+            this._chunkError(err.message);
+          }
+          IS_WORKER && xhr.status === 0 && this._chunkError();
+        }, this._chunkLoaded = function() {
+          if (xhr.readyState === 4) {
+            if (xhr.status < 200 || xhr.status >= 400) {
+              this._chunkError();
+              return;
+            }
+            this._start += this._config.chunkSize ? this._config.chunkSize : xhr.responseText.length, this._finished = !this._config.chunkSize || this._start >= getFileSize(xhr), this.parseChunk(xhr.responseText);
+          }
+        }, this._chunkError = function(errorMessage) {
+          var errorText = xhr.statusText || errorMessage;
+          this._sendError(new Error(errorText));
+        }, this._chunkTimeout = function() {
+          this._chunkError("Request timed out after " + this._config.downloadTimeout + "ms");
+        };
+        function getFileSize(xhr2) {
+          var contentRange = xhr2.getResponseHeader("Content-Range");
+          return contentRange === null ? -1 : parseInt(contentRange.substring(contentRange.lastIndexOf("/") + 1));
+        }
+      }
+      NetworkStreamer.prototype = Object.create(ChunkStreamer.prototype), NetworkStreamer.prototype.constructor = NetworkStreamer;
+      function FileStreamer(config) {
+        config = config || {}, config.chunkSize || (config.chunkSize = Papa3.LocalChunkSize), ChunkStreamer.call(this, config);
+        var reader, slice, usingAsyncReader = typeof FileReader < "u";
+        this.stream = function(file) {
+          this._input = file, slice = file.slice || file.webkitSlice || file.mozSlice, usingAsyncReader ? (reader = new FileReader(), reader.onload = bindFunction(this._chunkLoaded, this), reader.onerror = bindFunction(this._chunkError, this)) : reader = new FileReaderSync(), this._nextChunk();
+        }, this._nextChunk = function() {
+          !this._finished && (!this._config.preview || this._rowCount < this._config.preview) && this._readChunk();
+        }, this._readChunk = function() {
+          var input = this._input;
+          if (this._config.chunkSize) {
+            var end = Math.min(this._start + this._config.chunkSize, this._input.size);
+            input = slice.call(input, this._start, end);
+          }
+          var txt = reader.readAsText(input, this._config.encoding);
+          usingAsyncReader || this._chunkLoaded({ target: { result: txt } });
+        }, this._chunkLoaded = function(event) {
+          this._start += this._config.chunkSize, this._finished = !this._config.chunkSize || this._start >= this._input.size, this.parseChunk(event.target.result);
+        }, this._chunkError = function() {
+          this._sendError(reader.error);
+        };
+      }
+      FileStreamer.prototype = Object.create(ChunkStreamer.prototype), FileStreamer.prototype.constructor = FileStreamer;
+      function StringStreamer(config) {
+        config = config || {}, ChunkStreamer.call(this, config);
+        var remaining;
+        this.stream = function(s) {
+          return remaining = s, this._nextChunk();
+        }, this._nextChunk = function() {
+          if (!this._finished) {
+            var size = this._config.chunkSize, chunk;
+            return size ? (chunk = remaining.substring(0, size), remaining = remaining.substring(size)) : (chunk = remaining, remaining = ""), this._finished = !remaining, this.parseChunk(chunk);
+          }
+        };
+      }
+      StringStreamer.prototype = Object.create(StringStreamer.prototype), StringStreamer.prototype.constructor = StringStreamer;
+      function ReadableStreamStreamer(config) {
+        config = config || {}, ChunkStreamer.call(this, config);
+        var queue = [], parseOnData = !0, streamHasEnded = !1;
+        this.pause = function() {
+          ChunkStreamer.prototype.pause.apply(this, arguments), this._input.pause();
+        }, this.resume = function() {
+          ChunkStreamer.prototype.resume.apply(this, arguments), this._input.resume();
+        }, this.stream = function(stream) {
+          this._input = stream, this._input.on("data", this._streamData), this._input.on("end", this._streamEnd), this._input.on("error", this._streamError);
+        }, this._checkIsFinished = function() {
+          streamHasEnded && queue.length === 1 && (this._finished = !0);
+        }, this._nextChunk = function() {
+          this._checkIsFinished(), queue.length ? this.parseChunk(queue.shift()) : parseOnData = !0;
+        }, this._streamData = bindFunction(function(chunk) {
+          try {
+            queue.push(typeof chunk == "string" ? chunk : chunk.toString(this._config.encoding)), parseOnData && (parseOnData = !1, this._checkIsFinished(), this.parseChunk(queue.shift()));
+          } catch (error) {
+            this._streamError(error);
+          }
+        }, this), this._streamError = bindFunction(function(error) {
+          this._streamCleanUp(), this._sendError(error);
+        }, this), this._streamEnd = bindFunction(function() {
+          this._streamCleanUp(), streamHasEnded = !0, this._streamData("");
+        }, this), this._streamCleanUp = bindFunction(function() {
+          this._input.removeListener("data", this._streamData), this._input.removeListener("end", this._streamEnd), this._input.removeListener("error", this._streamError);
+        }, this);
+      }
+      ReadableStreamStreamer.prototype = Object.create(ChunkStreamer.prototype), ReadableStreamStreamer.prototype.constructor = ReadableStreamStreamer;
+      function DuplexStreamStreamer(_config) {
+        var Duplex = __require("stream").Duplex, config = copy(_config), parseOnWrite = !0, writeStreamHasFinished = !1, parseCallbackQueue = [], stream = null;
+        this._onCsvData = function(results) {
+          var data = results.data;
+          !stream.push(data) && !this._handle.paused() && this._handle.pause();
+        }, this._onCsvComplete = function() {
+          stream.push(null);
+        }, config.step = bindFunction(this._onCsvData, this), config.complete = bindFunction(this._onCsvComplete, this), ChunkStreamer.call(this, config), this._nextChunk = function() {
+          writeStreamHasFinished && parseCallbackQueue.length === 1 && (this._finished = !0), parseCallbackQueue.length ? parseCallbackQueue.shift()() : parseOnWrite = !0;
+        }, this._addToParseQueue = function(chunk, callback) {
+          parseCallbackQueue.push(bindFunction(function() {
+            if (this.parseChunk(typeof chunk == "string" ? chunk : chunk.toString(config.encoding)), isFunction(callback))
+              return callback();
+          }, this)), parseOnWrite && (parseOnWrite = !1, this._nextChunk());
+        }, this._onRead = function() {
+          this._handle.paused() && this._handle.resume();
+        }, this._onWrite = function(chunk, encoding, callback) {
+          this._addToParseQueue(chunk, callback);
+        }, this._onWriteComplete = function() {
+          writeStreamHasFinished = !0, this._addToParseQueue("");
+        }, this.getStream = function() {
+          return stream;
+        }, stream = new Duplex({
+          readableObjectMode: !0,
+          decodeStrings: !1,
+          read: bindFunction(this._onRead, this),
+          write: bindFunction(this._onWrite, this)
+        }), stream.once("finish", bindFunction(this._onWriteComplete, this));
+      }
+      typeof PAPA_BROWSER_CONTEXT > "u" && (DuplexStreamStreamer.prototype = Object.create(ChunkStreamer.prototype), DuplexStreamStreamer.prototype.constructor = DuplexStreamStreamer);
+      function ParserHandle(_config) {
+        var MAX_FLOAT = Math.pow(2, 53), MIN_FLOAT = -MAX_FLOAT, FLOAT = /^\s*-?(\d+\.?|\.\d+|\d+\.\d+)([eE][-+]?\d+)?\s*$/, ISO_DATE = /^((\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d\.\d+([+-][0-2]\d:[0-5]\d|Z))|(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d([+-][0-2]\d:[0-5]\d|Z))|(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d([+-][0-2]\d:[0-5]\d|Z)))$/, self2 = this, _stepCounter = 0, _rowCounter = 0, _input, _parser, _paused = !1, _aborted = !1, _delimiterError, _fields = [], _results = {
+          // The last results returned from the parser
+          data: [],
+          errors: [],
+          meta: {}
+        };
+        if (isFunction(_config.step)) {
+          var userStep = _config.step;
+          _config.step = function(results) {
+            if (_results = results, needsHeaderRow())
+              processResults();
+            else {
+              if (processResults(), _results.data.length === 0)
+                return;
+              _stepCounter += results.data.length, _config.preview && _stepCounter > _config.preview ? _parser.abort() : (_results.data = _results.data[0], userStep(_results, self2));
+            }
+          };
+        }
+        this.parse = function(input, baseIndex, ignoreLastRow) {
+          var quoteChar = _config.quoteChar || '"';
+          if (_config.newline || (_config.newline = this.guessLineEndings(input, quoteChar)), _delimiterError = !1, _config.delimiter)
+            isFunction(_config.delimiter) && (_config.delimiter = _config.delimiter(input), _results.meta.delimiter = _config.delimiter);
+          else {
+            var delimGuess = guessDelimiter(input, _config.newline, _config.skipEmptyLines, _config.comments, _config.delimitersToGuess);
+            delimGuess.successful ? _config.delimiter = delimGuess.bestDelimiter : (_delimiterError = !0, _config.delimiter = Papa3.DefaultDelimiter), _results.meta.delimiter = _config.delimiter;
+          }
+          var parserConfig = copy(_config);
+          return parserConfig.header = needsHeaderRow(), _config.preview && _config.header && parserConfig.preview++, _input = input, _parser = new Parser(parserConfig), _results = _parser.parse(_input, baseIndex, ignoreLastRow), processResults(), _paused ? { meta: { paused: !0 } } : _results || { meta: { paused: !1 } };
+        }, this.paused = function() {
+          return _paused;
+        }, this.pause = function() {
+          _paused = !0, _parser.abort(), _input = isFunction(_config.chunk) ? "" : _input.substring(_parser.getCharIndex());
+        }, this.resume = function() {
+          self2.streamer._halted ? (_paused = !1, self2.streamer.parseChunk(_input, !0)) : setTimeout(self2.resume, 3);
+        }, this.aborted = function() {
+          return _aborted;
+        }, this.abort = function() {
+          _aborted = !0, _parser.abort(), _results.meta.aborted = !0, isFunction(_config.complete) && _config.complete(_results), _input = "";
+        }, this.guessLineEndings = function(input, quoteChar) {
+          input = input.substring(0, 1024 * 1024);
+          var re = new RegExp(escapeRegExp(quoteChar) + "([^]*?)" + escapeRegExp(quoteChar), "gm");
+          input = input.replace(re, "");
+          var r = input.split("\r"), n = input.split(`
+`), nAppearsFirst = n.length > 1 && n[0].length < r[0].length;
+          if (r.length === 1 || nAppearsFirst)
+            return `
+`;
+          for (var numWithN = 0, i = 0; i < r.length; i++)
+            r[i][0] === `
+` && numWithN++;
+          return numWithN >= r.length / 2 ? `\r
+` : "\r";
+        };
+        function testEmptyLine(s) {
+          return _config.skipEmptyLines === "greedy" ? s.join("").trim() === "" : s.length === 1 && s[0].length === 0;
+        }
+        function testFloat(s) {
+          if (FLOAT.test(s)) {
+            var floatValue = parseFloat(s);
+            if (floatValue > MIN_FLOAT && floatValue < MAX_FLOAT)
+              return !0;
+          }
+          return !1;
+        }
+        function processResults() {
+          return _results && _delimiterError && (addError("Delimiter", "UndetectableDelimiter", "Unable to auto-detect delimiting character; defaulted to '" + Papa3.DefaultDelimiter + "'"), _delimiterError = !1), _config.skipEmptyLines && (_results.data = _results.data.filter(function(d) {
+            return !testEmptyLine(d);
+          })), needsHeaderRow() && fillHeaderFields(), applyHeaderAndDynamicTypingAndTransformation();
+        }
+        function needsHeaderRow() {
+          return _config.header && _fields.length === 0;
+        }
+        function fillHeaderFields() {
+          if (!_results)
+            return;
+          function addHeader(header) {
+            _fields.push(header);
+          }
+          if (Array.isArray(_results.data[0])) {
+            for (var i = 0; needsHeaderRow() && i < _results.data.length; i++)
+              _results.data[i].forEach(addHeader);
+            _results.data.splice(0, 1);
+          } else
+            _results.data.forEach(addHeader);
+        }
+        function shouldApplyDynamicTyping(field) {
+          return _config.dynamicTypingFunction && _config.dynamicTyping[field] === void 0 && (_config.dynamicTyping[field] = _config.dynamicTypingFunction(field)), (_config.dynamicTyping[field] || _config.dynamicTyping) === !0;
+        }
+        function parseDynamic(field, value) {
+          return shouldApplyDynamicTyping(field) ? value === "true" || value === "TRUE" ? !0 : value === "false" || value === "FALSE" ? !1 : testFloat(value) ? parseFloat(value) : ISO_DATE.test(value) ? new Date(value) : value === "" ? null : value : value;
+        }
+        function applyHeaderAndDynamicTypingAndTransformation() {
+          if (!_results || !_config.header && !_config.dynamicTyping && !_config.transform)
+            return _results;
+          function processRow(rowSource, i) {
+            var row = _config.header ? {} : [], j;
+            for (j = 0; j < rowSource.length; j++) {
+              var field = j, value = rowSource[j];
+              _config.header && (field = j >= _fields.length ? "__parsed_extra" : _fields[j]), _config.transform && (value = _config.transform(value, field)), value = parseDynamic(field, value), field === "__parsed_extra" ? (row[field] = row[field] || [], row[field].push(value)) : row[field] = value;
+            }
+            return _config.header && (j > _fields.length ? addError("FieldMismatch", "TooManyFields", "Too many fields: expected " + _fields.length + " fields but parsed " + j, _rowCounter + i) : j < _fields.length && addError("FieldMismatch", "TooFewFields", "Too few fields: expected " + _fields.length + " fields but parsed " + j, _rowCounter + i)), row;
+          }
+          var incrementBy = 1;
+          return !_results.data.length || Array.isArray(_results.data[0]) ? (_results.data = _results.data.map(processRow), incrementBy = _results.data.length) : _results.data = processRow(_results.data, 0), _config.header && _results.meta && (_results.meta.fields = _fields), _rowCounter += incrementBy, _results;
+        }
+        function guessDelimiter(input, newline, skipEmptyLines, comments, delimitersToGuess) {
+          var bestDelim, bestDelta, fieldCountPrevRow, maxFieldCount;
+          delimitersToGuess = delimitersToGuess || [",", "	", "|", ";", Papa3.RECORD_SEP, Papa3.UNIT_SEP];
+          for (var i = 0; i < delimitersToGuess.length; i++) {
+            var delim = delimitersToGuess[i], delta = 0, avgFieldCount = 0, emptyLinesCount = 0;
+            fieldCountPrevRow = void 0;
+            for (var preview = new Parser({
+              comments,
+              delimiter: delim,
+              newline,
+              preview: 10
+            }).parse(input), j = 0; j < preview.data.length; j++) {
+              if (skipEmptyLines && testEmptyLine(preview.data[j])) {
+                emptyLinesCount++;
+                continue;
+              }
+              var fieldCount = preview.data[j].length;
+              if (avgFieldCount += fieldCount, typeof fieldCountPrevRow > "u") {
+                fieldCountPrevRow = fieldCount;
+                continue;
+              } else fieldCount > 0 && (delta += Math.abs(fieldCount - fieldCountPrevRow), fieldCountPrevRow = fieldCount);
+            }
+            preview.data.length > 0 && (avgFieldCount /= preview.data.length - emptyLinesCount), avgFieldCount > 1.99 && (typeof bestDelta > "u" || delta < bestDelta || delta === bestDelta && avgFieldCount > maxFieldCount) && (bestDelta = delta, bestDelim = delim, maxFieldCount = avgFieldCount);
+          }
+          return _config.delimiter = bestDelim, {
+            successful: !!bestDelim,
+            bestDelimiter: bestDelim
+          };
+        }
+        function addError(type, code, msg, row) {
+          var error = {
+            type,
+            code,
+            message: msg
+          };
+          row !== void 0 && (error.row = row), _results.errors.push(error);
+        }
+      }
+      function escapeRegExp(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }
+      function Parser(config) {
+        config = config || {};
+        var delim = config.delimiter, newline = config.newline, comments = config.comments, step = config.step, preview = config.preview, fastMode = config.fastMode, quoteChar, renamedHeaders = null, headerParsed = !1;
+        config.quoteChar === void 0 || config.quoteChar === null ? quoteChar = '"' : quoteChar = config.quoteChar;
+        var escapeChar = quoteChar;
+        if (config.escapeChar !== void 0 && (escapeChar = config.escapeChar), (typeof delim != "string" || Papa3.BAD_DELIMITERS.indexOf(delim) > -1) && (delim = ","), comments === delim)
+          throw new Error("Comment character same as delimiter");
+        comments === !0 ? comments = "#" : (typeof comments != "string" || Papa3.BAD_DELIMITERS.indexOf(comments) > -1) && (comments = !1), newline !== `
+` && newline !== "\r" && newline !== `\r
+` && (newline = `
+`);
+        var cursor = 0, aborted = !1;
+        this.parse = function(input, baseIndex, ignoreLastRow) {
+          if (typeof input != "string")
+            throw new Error("Input must be a string");
+          var inputLen = input.length, delimLen = delim.length, newlineLen = newline.length, commentsLen = comments.length, stepIsFunction = isFunction(step);
+          cursor = 0;
+          var data = [], errors = [], row = [], lastCursor = 0;
+          if (!input)
+            return returnable();
+          if (fastMode || fastMode !== !1 && input.indexOf(quoteChar) === -1) {
+            for (var rows = input.split(newline), i = 0; i < rows.length; i++) {
+              if (row = rows[i], cursor += row.length, i !== rows.length - 1)
+                cursor += newline.length;
+              else if (ignoreLastRow)
+                return returnable();
+              if (!(comments && row.substring(0, commentsLen) === comments)) {
+                if (stepIsFunction) {
+                  if (data = [], pushRow(row.split(delim)), doStep(), aborted)
+                    return returnable();
+                } else
+                  pushRow(row.split(delim));
+                if (preview && i >= preview)
+                  return data = data.slice(0, preview), returnable(!0);
+              }
+            }
+            return returnable();
+          }
+          for (var nextDelim = input.indexOf(delim, cursor), nextNewline = input.indexOf(newline, cursor), quoteCharRegex = new RegExp(escapeRegExp(escapeChar) + escapeRegExp(quoteChar), "g"), quoteSearch = input.indexOf(quoteChar, cursor); ; ) {
+            if (input[cursor] === quoteChar) {
+              for (quoteSearch = cursor, cursor++; ; ) {
+                if (quoteSearch = input.indexOf(quoteChar, quoteSearch + 1), quoteSearch === -1)
+                  return ignoreLastRow || errors.push({
+                    type: "Quotes",
+                    code: "MissingQuotes",
+                    message: "Quoted field unterminated",
+                    row: data.length,
+                    // row has yet to be inserted
+                    index: cursor
+                  }), finish();
+                if (quoteSearch === inputLen - 1) {
+                  var value = input.substring(cursor, quoteSearch).replace(quoteCharRegex, quoteChar);
+                  return finish(value);
+                }
+                if (quoteChar === escapeChar && input[quoteSearch + 1] === escapeChar) {
+                  quoteSearch++;
+                  continue;
+                }
+                if (!(quoteChar !== escapeChar && quoteSearch !== 0 && input[quoteSearch - 1] === escapeChar)) {
+                  nextDelim !== -1 && nextDelim < quoteSearch + 1 && (nextDelim = input.indexOf(delim, quoteSearch + 1)), nextNewline !== -1 && nextNewline < quoteSearch + 1 && (nextNewline = input.indexOf(newline, quoteSearch + 1));
+                  var checkUpTo = nextNewline === -1 ? nextDelim : Math.min(nextDelim, nextNewline), spacesBetweenQuoteAndDelimiter = extraSpaces(checkUpTo);
+                  if (input.substr(quoteSearch + 1 + spacesBetweenQuoteAndDelimiter, delimLen) === delim) {
+                    row.push(input.substring(cursor, quoteSearch).replace(quoteCharRegex, quoteChar)), cursor = quoteSearch + 1 + spacesBetweenQuoteAndDelimiter + delimLen, input[quoteSearch + 1 + spacesBetweenQuoteAndDelimiter + delimLen] !== quoteChar && (quoteSearch = input.indexOf(quoteChar, cursor)), nextDelim = input.indexOf(delim, cursor), nextNewline = input.indexOf(newline, cursor);
+                    break;
+                  }
+                  var spacesBetweenQuoteAndNewLine = extraSpaces(nextNewline);
+                  if (input.substring(quoteSearch + 1 + spacesBetweenQuoteAndNewLine, quoteSearch + 1 + spacesBetweenQuoteAndNewLine + newlineLen) === newline) {
+                    if (row.push(input.substring(cursor, quoteSearch).replace(quoteCharRegex, quoteChar)), saveRow(quoteSearch + 1 + spacesBetweenQuoteAndNewLine + newlineLen), nextDelim = input.indexOf(delim, cursor), quoteSearch = input.indexOf(quoteChar, cursor), stepIsFunction && (doStep(), aborted))
+                      return returnable();
+                    if (preview && data.length >= preview)
+                      return returnable(!0);
+                    break;
+                  }
+                  errors.push({
+                    type: "Quotes",
+                    code: "InvalidQuotes",
+                    message: "Trailing quote on quoted field is malformed",
+                    row: data.length,
+                    // row has yet to be inserted
+                    index: cursor
+                  }), quoteSearch++;
+                }
+              }
+              continue;
+            }
+            if (comments && row.length === 0 && input.substring(cursor, cursor + commentsLen) === comments) {
+              if (nextNewline === -1)
+                return returnable();
+              cursor = nextNewline + newlineLen, nextNewline = input.indexOf(newline, cursor), nextDelim = input.indexOf(delim, cursor);
+              continue;
+            }
+            if (nextDelim !== -1 && (nextDelim < nextNewline || nextNewline === -1)) {
+              row.push(input.substring(cursor, nextDelim)), cursor = nextDelim + delimLen, nextDelim = input.indexOf(delim, cursor);
+              continue;
+            }
+            if (nextNewline !== -1) {
+              if (row.push(input.substring(cursor, nextNewline)), saveRow(nextNewline + newlineLen), stepIsFunction && (doStep(), aborted))
+                return returnable();
+              if (preview && data.length >= preview)
+                return returnable(!0);
+              continue;
+            }
+            break;
+          }
+          return finish();
+          function pushRow(row2) {
+            data.push(row2), lastCursor = cursor;
+          }
+          function extraSpaces(index) {
+            var spaceLength = 0;
+            if (index !== -1) {
+              var textBetweenClosingQuoteAndIndex = input.substring(quoteSearch + 1, index);
+              textBetweenClosingQuoteAndIndex && textBetweenClosingQuoteAndIndex.trim() === "" && (spaceLength = textBetweenClosingQuoteAndIndex.length);
+            }
+            return spaceLength;
+          }
+          function finish(value2) {
+            return ignoreLastRow || (typeof value2 > "u" && (value2 = input.substring(cursor)), row.push(value2), cursor = inputLen, pushRow(row), stepIsFunction && doStep()), returnable();
+          }
+          function saveRow(newCursor) {
+            cursor = newCursor, pushRow(row), row = [], nextNewline = input.indexOf(newline, cursor);
+          }
+          function returnable(stopped) {
+            if (config.header && !baseIndex && data.length && !headerParsed) {
+              let result = data[0], headerCount = /* @__PURE__ */ Object.create(null), usedHeaders = new Set(result), duplicateHeaders = !1;
+              for (let i2 = 0; i2 < result.length; i2++) {
+                let header = stripBom(result[i2]);
+                if (isFunction(config.transformHeader) && (header = config.transformHeader(header, i2)), !headerCount[header])
+                  headerCount[header] = 1, result[i2] = header;
+                else {
+                  let newHeader, suffixCount = headerCount[header];
+                  do
+                    newHeader = `${header}_${suffixCount}`, suffixCount++;
+                  while (usedHeaders.has(newHeader));
+                  usedHeaders.add(newHeader), result[i2] = newHeader, headerCount[header]++, duplicateHeaders = !0, renamedHeaders === null && (renamedHeaders = {}), renamedHeaders[newHeader] = header;
+                }
+                usedHeaders.add(header);
+              }
+              duplicateHeaders && console.warn("Duplicate headers found and renamed."), headerParsed = !0;
+            }
+            return {
+              data,
+              errors,
+              meta: {
+                delimiter: delim,
+                linebreak: newline,
+                aborted,
+                truncated: !!stopped,
+                cursor: lastCursor + (baseIndex || 0),
+                renamedHeaders
+              }
+            };
+          }
+          function doStep() {
+            step(returnable()), data = [], errors = [];
+          }
+        }, this.abort = function() {
+          aborted = !0;
+        }, this.getCharIndex = function() {
+          return cursor;
+        };
+      }
+      function newWorker() {
+        if (!Papa3.WORKERS_SUPPORTED)
+          return !1;
+        var workerUrl = getWorkerBlob(), w = new global2.Worker(workerUrl);
+        return w.onmessage = mainThreadReceivedMessage, w.id = workerIdCounter++, workers[w.id] = w, w;
+      }
+      function mainThreadReceivedMessage(e) {
+        var msg = e.data, worker = workers[msg.workerId], aborted = !1;
+        if (msg.error)
+          worker.userError(msg.error, msg.file);
+        else if (msg.results && msg.results.data) {
+          var abort = function() {
+            aborted = !0, completeWorker(msg.workerId, { data: [], errors: [], meta: { aborted: !0 } });
+          }, handle = {
+            abort,
+            pause: notImplemented,
+            resume: notImplemented
+          };
+          if (isFunction(worker.userStep)) {
+            for (var i = 0; i < msg.results.data.length && (worker.userStep({
+              data: msg.results.data[i],
+              errors: msg.results.errors,
+              meta: msg.results.meta
+            }, handle), !aborted); i++)
+              ;
+            delete msg.results;
+          } else isFunction(worker.userChunk) && (worker.userChunk(msg.results, handle, msg.file), delete msg.results);
+        }
+        msg.finished && !aborted && completeWorker(msg.workerId, msg.results);
+      }
+      function completeWorker(workerId, results) {
+        var worker = workers[workerId];
+        isFunction(worker.userComplete) && worker.userComplete(results), worker.terminate(), delete workers[workerId];
+      }
+      function notImplemented() {
+        throw new Error("Not implemented.");
+      }
+      function workerThreadReceivedMessage(e) {
+        var msg = e.data;
+        if (typeof Papa3.WORKER_ID > "u" && msg && (Papa3.WORKER_ID = msg.workerId), typeof msg.input == "string")
+          global2.postMessage({
+            workerId: Papa3.WORKER_ID,
+            results: Papa3.parse(msg.input, msg.config),
+            finished: !0
+          });
+        else if (global2.File && msg.input instanceof File || msg.input instanceof Object) {
+          var results = Papa3.parse(msg.input, msg.config);
+          results && global2.postMessage({
+            workerId: Papa3.WORKER_ID,
+            results,
+            finished: !0
+          });
+        }
+      }
+      function copy(obj) {
+        if (typeof obj != "object" || obj === null)
+          return obj;
+        var cpy = Array.isArray(obj) ? [] : {};
+        for (var key in obj)
+          cpy[key] = copy(obj[key]);
+        return cpy;
+      }
+      function bindFunction(f, self2) {
+        return function() {
+          f.apply(self2, arguments);
+        };
+      }
+      function isFunction(func) {
+        return typeof func == "function";
+      }
+      return Papa3;
+    });
+  }
+});
+
 // node_modules/process-nextick-args/index.js
 var require_process_nextick_args = __commonJS({
   "node_modules/process-nextick-args/index.js"(exports, module) {
@@ -10862,699 +11555,6 @@ var require_lib3 = __commonJS({
   }
 });
 
-// node_modules/papaparse/papaparse.js
-var require_papaparse = __commonJS({
-  "node_modules/papaparse/papaparse.js"(exports, module) {
-    (function(root, factory) {
-      typeof define == "function" && define.amd ? define([], factory) : typeof module == "object" && typeof exports < "u" ? module.exports = factory() : root.Papa = factory();
-    })(exports, function moduleFactory() {
-      "use strict";
-      var global2 = /* @__PURE__ */ (function() {
-        return typeof self < "u" ? self : typeof window < "u" ? window : typeof global2 < "u" ? global2 : {};
-      })();
-      function getWorkerBlob() {
-        var URL2 = global2.URL || global2.webkitURL || null, code = moduleFactory.toString();
-        return Papa2.BLOB_URL || (Papa2.BLOB_URL = URL2.createObjectURL(new Blob(["var global = (function() { if (typeof self !== 'undefined') { return self; } if (typeof window !== 'undefined') { return window; } if (typeof global !== 'undefined') { return global; } return {}; })(); global.IS_PAPA_WORKER=true; ", "(", code, ")();"], { type: "text/javascript" })));
-      }
-      var IS_WORKER = !global2.document && !!global2.postMessage, IS_PAPA_WORKER = global2.IS_PAPA_WORKER || !1, workers = {}, workerIdCounter = 0, Papa2 = {};
-      Papa2.parse = CsvToJson, Papa2.unparse = JsonToCsv, Papa2.RECORD_SEP = "", Papa2.UNIT_SEP = "", Papa2.BYTE_ORDER_MARK = "\uFEFF", Papa2.BAD_DELIMITERS = ["\r", `
-`, '"', Papa2.BYTE_ORDER_MARK], Papa2.WORKERS_SUPPORTED = !IS_WORKER && !!global2.Worker, Papa2.NODE_STREAM_INPUT = 1, Papa2.LocalChunkSize = 1024 * 1024 * 10, Papa2.RemoteChunkSize = 1024 * 1024 * 5, Papa2.DefaultDelimiter = ",", Papa2.Parser = Parser, Papa2.ParserHandle = ParserHandle, Papa2.NetworkStreamer = NetworkStreamer, Papa2.FileStreamer = FileStreamer, Papa2.StringStreamer = StringStreamer, Papa2.ReadableStreamStreamer = ReadableStreamStreamer, typeof PAPA_BROWSER_CONTEXT > "u" && (Papa2.DuplexStreamStreamer = DuplexStreamStreamer), IS_PAPA_WORKER && (global2.onmessage = workerThreadReceivedMessage);
-      function stripBom(string) {
-        return string.charCodeAt(0) === 65279 ? string.slice(1) : string;
-      }
-      function CsvToJson(_input, _config) {
-        _config = _config || {};
-        var dynamicTyping = _config.dynamicTyping || !1;
-        if (isFunction(dynamicTyping) && (_config.dynamicTypingFunction = dynamicTyping, dynamicTyping = {}), _config.dynamicTyping = dynamicTyping, _config.transform = isFunction(_config.transform) ? _config.transform : !1, _config.downloadTimeout !== void 0) {
-          var downloadTimeout = parseInt(_config.downloadTimeout);
-          if (isNaN(downloadTimeout))
-            throw new Error("Config downloadTimeout value (" + _config.downloadTimeout + ") not parsable by parseInt(val).");
-          _config.downloadTimeout = downloadTimeout;
-        }
-        if (_config.worker && Papa2.WORKERS_SUPPORTED) {
-          var w = newWorker();
-          w.userStep = _config.step, w.userChunk = _config.chunk, w.userComplete = _config.complete, w.userError = _config.error, _config.step = isFunction(_config.step), _config.chunk = isFunction(_config.chunk), _config.complete = isFunction(_config.complete), _config.error = isFunction(_config.error), delete _config.worker, w.postMessage({
-            input: _input,
-            config: _config,
-            workerId: w.id
-          });
-          return;
-        }
-        var streamer = null;
-        return _input === Papa2.NODE_STREAM_INPUT && typeof PAPA_BROWSER_CONTEXT > "u" ? (streamer = new DuplexStreamStreamer(_config), streamer.getStream()) : (typeof _input == "string" ? (_input = stripBom(_input), _config.download ? streamer = new NetworkStreamer(_config) : streamer = new StringStreamer(_config)) : _input.readable === !0 && isFunction(_input.read) && isFunction(_input.on) ? streamer = new ReadableStreamStreamer(_config) : (global2.File && _input instanceof File || _input instanceof Object) && (streamer = new FileStreamer(_config)), streamer.stream(_input));
-      }
-      function JsonToCsv(_input, _config) {
-        var _quotes = !1, _writeHeader = !0, _delimiter = ",", _newline = `\r
-`, _quoteChar = '"', _escapedQuote = _quoteChar + _quoteChar, _skipEmptyLines = !1, _columns = null, _escapeFormulae = !1;
-        unpackConfig();
-        var quoteCharRegex = new RegExp(escapeRegExp(_quoteChar), "g");
-        if (typeof _input == "string" && (_input = JSON.parse(_input)), Array.isArray(_input)) {
-          if (!_input.length || Array.isArray(_input[0]))
-            return serialize(null, _input, _skipEmptyLines);
-          if (typeof _input[0] == "object")
-            return serialize(_columns || Object.keys(_input[0]), _input, _skipEmptyLines);
-        } else if (typeof _input == "object")
-          return typeof _input.data == "string" && (_input.data = JSON.parse(_input.data)), Array.isArray(_input.data) && (_input.fields || (_input.fields = _input.meta && _input.meta.fields || _columns), _input.fields || (_input.fields = Array.isArray(_input.data[0]) ? _input.fields : typeof _input.data[0] == "object" ? Object.keys(_input.data[0]) : []), !Array.isArray(_input.data[0]) && typeof _input.data[0] != "object" && (_input.data = [_input.data])), serialize(_input.fields || [], _input.data || [], _skipEmptyLines);
-        throw new Error("Unable to serialize unrecognized input");
-        function unpackConfig() {
-          if (typeof _config == "object") {
-            if (typeof _config.delimiter == "string" && !Papa2.BAD_DELIMITERS.filter(function(value) {
-              return _config.delimiter.indexOf(value) !== -1;
-            }).length && (_delimiter = _config.delimiter), (typeof _config.quotes == "boolean" || typeof _config.quotes == "function" || Array.isArray(_config.quotes)) && (_quotes = _config.quotes), (typeof _config.skipEmptyLines == "boolean" || typeof _config.skipEmptyLines == "string") && (_skipEmptyLines = _config.skipEmptyLines), typeof _config.newline == "string" && (_newline = _config.newline), typeof _config.quoteChar == "string" && (_quoteChar = _config.quoteChar, _escapedQuote = _quoteChar + _quoteChar), typeof _config.header == "boolean" && (_writeHeader = _config.header), Array.isArray(_config.columns)) {
-              if (_config.columns.length === 0) throw new Error("Option columns is empty");
-              _columns = _config.columns;
-            }
-            _config.escapeChar !== void 0 && (_escapedQuote = _config.escapeChar + _quoteChar), _config.escapeFormulae instanceof RegExp ? _escapeFormulae = _config.escapeFormulae : typeof _config.escapeFormulae == "boolean" && _config.escapeFormulae && (_escapeFormulae = /^[=+\-@\t\r].*$/);
-          }
-        }
-        function serialize(fields, data, skipEmptyLines) {
-          var csv = "";
-          typeof fields == "string" && (fields = JSON.parse(fields)), typeof data == "string" && (data = JSON.parse(data));
-          var hasHeader = Array.isArray(fields) && fields.length > 0, dataKeyedByField = !Array.isArray(data[0]);
-          if (hasHeader && _writeHeader) {
-            for (var i = 0; i < fields.length; i++)
-              i > 0 && (csv += _delimiter), csv += safe(fields[i], i);
-            data.length > 0 && (csv += _newline);
-          }
-          for (var row = 0; row < data.length; row++) {
-            var maxCol = hasHeader ? fields.length : data[row].length, emptyLine = !1, nullLine = hasHeader ? Object.keys(data[row]).length === 0 : data[row].length === 0;
-            if (skipEmptyLines && !hasHeader && (emptyLine = skipEmptyLines === "greedy" ? data[row].join("").trim() === "" : data[row].length === 1 && data[row][0].length === 0), skipEmptyLines === "greedy" && hasHeader) {
-              for (var line = [], c = 0; c < maxCol; c++) {
-                var cx = dataKeyedByField ? fields[c] : c;
-                line.push(data[row][cx]);
-              }
-              emptyLine = line.join("").trim() === "";
-            }
-            if (!emptyLine) {
-              for (var col = 0; col < maxCol; col++) {
-                col > 0 && !nullLine && (csv += _delimiter);
-                var colIdx = hasHeader && dataKeyedByField ? fields[col] : col;
-                csv += safe(data[row][colIdx], col);
-              }
-              row < data.length - 1 && (!skipEmptyLines || maxCol > 0 && !nullLine) && (csv += _newline);
-            }
-          }
-          return csv;
-        }
-        function safe(str, col) {
-          if (typeof str > "u" || str === null)
-            return "";
-          if (str.constructor === Date)
-            return isNaN(str.getTime()) ? "" : str.toISOString();
-          var needsQuotes = !1;
-          _escapeFormulae && typeof str == "string" && _escapeFormulae.test(str) && (str = "'" + str, needsQuotes = !0);
-          var strValue = str.toString(), escapedQuoteStr = strValue.replace(quoteCharRegex, _escapedQuote);
-          return needsQuotes = needsQuotes || _quotes === !0 || typeof _quotes == "function" && _quotes(str, col) || Array.isArray(_quotes) && _quotes[col] || hasAny(escapedQuoteStr, Papa2.BAD_DELIMITERS) || escapedQuoteStr.indexOf(_delimiter) > -1 || strValue.indexOf(_quoteChar) > -1 || escapedQuoteStr.charAt(0) === " " || escapedQuoteStr.charAt(escapedQuoteStr.length - 1) === " ", needsQuotes ? _quoteChar + escapedQuoteStr + _quoteChar : escapedQuoteStr;
-        }
-        function hasAny(str, substrings) {
-          for (var i = 0; i < substrings.length; i++)
-            if (str.indexOf(substrings[i]) > -1)
-              return !0;
-          return !1;
-        }
-      }
-      function ChunkStreamer(config) {
-        this._handle = null, this._finished = !1, this._completed = !1, this._halted = !1, this._input = null, this._baseIndex = 0, this._partialLine = "", this._rowCount = 0, this._start = 0, this._nextChunk = null, this.isFirstChunk = !0, this._completeResults = {
-          data: [],
-          errors: [],
-          meta: {}
-        }, replaceConfig.call(this, config), this.parseChunk = function(chunk, isFakeChunk) {
-          let skipFirstNLines = parseInt(this._config.skipFirstNLines) || 0;
-          if (this.isFirstChunk && skipFirstNLines > 0) {
-            let _newline = this._config.newline;
-            if (!_newline) {
-              let quoteChar = this._config.quoteChar || '"';
-              _newline = this._handle.guessLineEndings(chunk, quoteChar);
-            }
-            chunk = [...chunk.split(_newline).slice(skipFirstNLines)].join(_newline);
-          }
-          if (this.isFirstChunk && isFunction(this._config.beforeFirstChunk)) {
-            var modifiedChunk = this._config.beforeFirstChunk(chunk);
-            modifiedChunk !== void 0 && (chunk = modifiedChunk);
-          }
-          this.isFirstChunk = !1, this._halted = !1;
-          var aggregate = this._partialLine + chunk;
-          this._partialLine = "";
-          var results = this._handle.parse(aggregate, this._baseIndex, !this._finished);
-          if (this._handle.paused() || this._handle.aborted()) {
-            this._halted = !0;
-            return;
-          }
-          var lastIndex = results.meta.cursor;
-          this._finished || (this._partialLine = aggregate.substring(lastIndex - this._baseIndex), this._baseIndex = lastIndex), results && results.data && (this._rowCount += results.data.length);
-          var finishedIncludingPreview = this._finished || this._config.preview && this._rowCount >= this._config.preview;
-          if (IS_PAPA_WORKER)
-            global2.postMessage({
-              results,
-              workerId: Papa2.WORKER_ID,
-              finished: finishedIncludingPreview
-            });
-          else if (isFunction(this._config.chunk) && !isFakeChunk) {
-            if (this._config.chunk(results, this._handle), this._handle.paused() || this._handle.aborted()) {
-              this._halted = !0;
-              return;
-            }
-            results = void 0, this._completeResults = void 0;
-          }
-          return !this._config.step && !this._config.chunk && (this._completeResults.data = this._completeResults.data.concat(results.data), this._completeResults.errors = this._completeResults.errors.concat(results.errors), this._completeResults.meta = results.meta), !this._completed && finishedIncludingPreview && isFunction(this._config.complete) && (!results || !results.meta.aborted) && (this._config.complete(this._completeResults, this._input), this._completed = !0), !finishedIncludingPreview && (!results || !results.meta.paused) && this._nextChunk(), results;
-        }, this._sendError = function(error) {
-          isFunction(this._config.error) ? this._config.error(error) : IS_PAPA_WORKER && this._config.error && global2.postMessage({
-            workerId: Papa2.WORKER_ID,
-            error,
-            finished: !1
-          });
-        };
-        function replaceConfig(config2) {
-          var configCopy = copy(config2);
-          configCopy.chunkSize = parseInt(configCopy.chunkSize), !config2.step && !config2.chunk && (configCopy.chunkSize = null), this._handle = new ParserHandle(configCopy), this._handle.streamer = this, this._config = configCopy;
-        }
-      }
-      function NetworkStreamer(config) {
-        config = config || {}, config.chunkSize || (config.chunkSize = Papa2.RemoteChunkSize), ChunkStreamer.call(this, config);
-        var xhr;
-        IS_WORKER ? this._nextChunk = function() {
-          this._readChunk(), this._chunkLoaded();
-        } : this._nextChunk = function() {
-          this._readChunk();
-        }, this.stream = function(url) {
-          this._input = url, this._nextChunk();
-        }, this._readChunk = function() {
-          if (this._finished) {
-            this._chunkLoaded();
-            return;
-          }
-          if (xhr = new XMLHttpRequest(), this._config.withCredentials && (xhr.withCredentials = this._config.withCredentials), IS_WORKER || (xhr.onload = bindFunction(this._chunkLoaded, this), xhr.onerror = bindFunction(this._chunkError, this)), xhr.ontimeout = bindFunction(this._chunkTimeout, this), xhr.open(this._config.downloadRequestBody ? "POST" : "GET", this._input, !IS_WORKER), this._config.downloadTimeout && !IS_WORKER && (xhr.timeout = this._config.downloadTimeout), this._config.downloadRequestHeaders) {
-            var headers = this._config.downloadRequestHeaders;
-            for (var headerName in headers)
-              xhr.setRequestHeader(headerName, headers[headerName]);
-          }
-          if (this._config.chunkSize) {
-            var end = this._start + this._config.chunkSize - 1;
-            xhr.setRequestHeader("Range", "bytes=" + this._start + "-" + end);
-          }
-          try {
-            xhr.send(this._config.downloadRequestBody);
-          } catch (err) {
-            this._chunkError(err.message);
-          }
-          IS_WORKER && xhr.status === 0 && this._chunkError();
-        }, this._chunkLoaded = function() {
-          if (xhr.readyState === 4) {
-            if (xhr.status < 200 || xhr.status >= 400) {
-              this._chunkError();
-              return;
-            }
-            this._start += this._config.chunkSize ? this._config.chunkSize : xhr.responseText.length, this._finished = !this._config.chunkSize || this._start >= getFileSize(xhr), this.parseChunk(xhr.responseText);
-          }
-        }, this._chunkError = function(errorMessage) {
-          var errorText = xhr.statusText || errorMessage;
-          this._sendError(new Error(errorText));
-        }, this._chunkTimeout = function() {
-          this._chunkError("Request timed out after " + this._config.downloadTimeout + "ms");
-        };
-        function getFileSize(xhr2) {
-          var contentRange = xhr2.getResponseHeader("Content-Range");
-          return contentRange === null ? -1 : parseInt(contentRange.substring(contentRange.lastIndexOf("/") + 1));
-        }
-      }
-      NetworkStreamer.prototype = Object.create(ChunkStreamer.prototype), NetworkStreamer.prototype.constructor = NetworkStreamer;
-      function FileStreamer(config) {
-        config = config || {}, config.chunkSize || (config.chunkSize = Papa2.LocalChunkSize), ChunkStreamer.call(this, config);
-        var reader, slice, usingAsyncReader = typeof FileReader < "u";
-        this.stream = function(file) {
-          this._input = file, slice = file.slice || file.webkitSlice || file.mozSlice, usingAsyncReader ? (reader = new FileReader(), reader.onload = bindFunction(this._chunkLoaded, this), reader.onerror = bindFunction(this._chunkError, this)) : reader = new FileReaderSync(), this._nextChunk();
-        }, this._nextChunk = function() {
-          !this._finished && (!this._config.preview || this._rowCount < this._config.preview) && this._readChunk();
-        }, this._readChunk = function() {
-          var input = this._input;
-          if (this._config.chunkSize) {
-            var end = Math.min(this._start + this._config.chunkSize, this._input.size);
-            input = slice.call(input, this._start, end);
-          }
-          var txt = reader.readAsText(input, this._config.encoding);
-          usingAsyncReader || this._chunkLoaded({ target: { result: txt } });
-        }, this._chunkLoaded = function(event) {
-          this._start += this._config.chunkSize, this._finished = !this._config.chunkSize || this._start >= this._input.size, this.parseChunk(event.target.result);
-        }, this._chunkError = function() {
-          this._sendError(reader.error);
-        };
-      }
-      FileStreamer.prototype = Object.create(ChunkStreamer.prototype), FileStreamer.prototype.constructor = FileStreamer;
-      function StringStreamer(config) {
-        config = config || {}, ChunkStreamer.call(this, config);
-        var remaining;
-        this.stream = function(s) {
-          return remaining = s, this._nextChunk();
-        }, this._nextChunk = function() {
-          if (!this._finished) {
-            var size = this._config.chunkSize, chunk;
-            return size ? (chunk = remaining.substring(0, size), remaining = remaining.substring(size)) : (chunk = remaining, remaining = ""), this._finished = !remaining, this.parseChunk(chunk);
-          }
-        };
-      }
-      StringStreamer.prototype = Object.create(StringStreamer.prototype), StringStreamer.prototype.constructor = StringStreamer;
-      function ReadableStreamStreamer(config) {
-        config = config || {}, ChunkStreamer.call(this, config);
-        var queue = [], parseOnData = !0, streamHasEnded = !1;
-        this.pause = function() {
-          ChunkStreamer.prototype.pause.apply(this, arguments), this._input.pause();
-        }, this.resume = function() {
-          ChunkStreamer.prototype.resume.apply(this, arguments), this._input.resume();
-        }, this.stream = function(stream) {
-          this._input = stream, this._input.on("data", this._streamData), this._input.on("end", this._streamEnd), this._input.on("error", this._streamError);
-        }, this._checkIsFinished = function() {
-          streamHasEnded && queue.length === 1 && (this._finished = !0);
-        }, this._nextChunk = function() {
-          this._checkIsFinished(), queue.length ? this.parseChunk(queue.shift()) : parseOnData = !0;
-        }, this._streamData = bindFunction(function(chunk) {
-          try {
-            queue.push(typeof chunk == "string" ? chunk : chunk.toString(this._config.encoding)), parseOnData && (parseOnData = !1, this._checkIsFinished(), this.parseChunk(queue.shift()));
-          } catch (error) {
-            this._streamError(error);
-          }
-        }, this), this._streamError = bindFunction(function(error) {
-          this._streamCleanUp(), this._sendError(error);
-        }, this), this._streamEnd = bindFunction(function() {
-          this._streamCleanUp(), streamHasEnded = !0, this._streamData("");
-        }, this), this._streamCleanUp = bindFunction(function() {
-          this._input.removeListener("data", this._streamData), this._input.removeListener("end", this._streamEnd), this._input.removeListener("error", this._streamError);
-        }, this);
-      }
-      ReadableStreamStreamer.prototype = Object.create(ChunkStreamer.prototype), ReadableStreamStreamer.prototype.constructor = ReadableStreamStreamer;
-      function DuplexStreamStreamer(_config) {
-        var Duplex = __require("stream").Duplex, config = copy(_config), parseOnWrite = !0, writeStreamHasFinished = !1, parseCallbackQueue = [], stream = null;
-        this._onCsvData = function(results) {
-          var data = results.data;
-          !stream.push(data) && !this._handle.paused() && this._handle.pause();
-        }, this._onCsvComplete = function() {
-          stream.push(null);
-        }, config.step = bindFunction(this._onCsvData, this), config.complete = bindFunction(this._onCsvComplete, this), ChunkStreamer.call(this, config), this._nextChunk = function() {
-          writeStreamHasFinished && parseCallbackQueue.length === 1 && (this._finished = !0), parseCallbackQueue.length ? parseCallbackQueue.shift()() : parseOnWrite = !0;
-        }, this._addToParseQueue = function(chunk, callback) {
-          parseCallbackQueue.push(bindFunction(function() {
-            if (this.parseChunk(typeof chunk == "string" ? chunk : chunk.toString(config.encoding)), isFunction(callback))
-              return callback();
-          }, this)), parseOnWrite && (parseOnWrite = !1, this._nextChunk());
-        }, this._onRead = function() {
-          this._handle.paused() && this._handle.resume();
-        }, this._onWrite = function(chunk, encoding, callback) {
-          this._addToParseQueue(chunk, callback);
-        }, this._onWriteComplete = function() {
-          writeStreamHasFinished = !0, this._addToParseQueue("");
-        }, this.getStream = function() {
-          return stream;
-        }, stream = new Duplex({
-          readableObjectMode: !0,
-          decodeStrings: !1,
-          read: bindFunction(this._onRead, this),
-          write: bindFunction(this._onWrite, this)
-        }), stream.once("finish", bindFunction(this._onWriteComplete, this));
-      }
-      typeof PAPA_BROWSER_CONTEXT > "u" && (DuplexStreamStreamer.prototype = Object.create(ChunkStreamer.prototype), DuplexStreamStreamer.prototype.constructor = DuplexStreamStreamer);
-      function ParserHandle(_config) {
-        var MAX_FLOAT = Math.pow(2, 53), MIN_FLOAT = -MAX_FLOAT, FLOAT = /^\s*-?(\d+\.?|\.\d+|\d+\.\d+)([eE][-+]?\d+)?\s*$/, ISO_DATE = /^((\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d\.\d+([+-][0-2]\d:[0-5]\d|Z))|(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d([+-][0-2]\d:[0-5]\d|Z))|(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d([+-][0-2]\d:[0-5]\d|Z)))$/, self2 = this, _stepCounter = 0, _rowCounter = 0, _input, _parser, _paused = !1, _aborted = !1, _delimiterError, _fields = [], _results = {
-          // The last results returned from the parser
-          data: [],
-          errors: [],
-          meta: {}
-        };
-        if (isFunction(_config.step)) {
-          var userStep = _config.step;
-          _config.step = function(results) {
-            if (_results = results, needsHeaderRow())
-              processResults();
-            else {
-              if (processResults(), _results.data.length === 0)
-                return;
-              _stepCounter += results.data.length, _config.preview && _stepCounter > _config.preview ? _parser.abort() : (_results.data = _results.data[0], userStep(_results, self2));
-            }
-          };
-        }
-        this.parse = function(input, baseIndex, ignoreLastRow) {
-          var quoteChar = _config.quoteChar || '"';
-          if (_config.newline || (_config.newline = this.guessLineEndings(input, quoteChar)), _delimiterError = !1, _config.delimiter)
-            isFunction(_config.delimiter) && (_config.delimiter = _config.delimiter(input), _results.meta.delimiter = _config.delimiter);
-          else {
-            var delimGuess = guessDelimiter(input, _config.newline, _config.skipEmptyLines, _config.comments, _config.delimitersToGuess);
-            delimGuess.successful ? _config.delimiter = delimGuess.bestDelimiter : (_delimiterError = !0, _config.delimiter = Papa2.DefaultDelimiter), _results.meta.delimiter = _config.delimiter;
-          }
-          var parserConfig = copy(_config);
-          return parserConfig.header = needsHeaderRow(), _config.preview && _config.header && parserConfig.preview++, _input = input, _parser = new Parser(parserConfig), _results = _parser.parse(_input, baseIndex, ignoreLastRow), processResults(), _paused ? { meta: { paused: !0 } } : _results || { meta: { paused: !1 } };
-        }, this.paused = function() {
-          return _paused;
-        }, this.pause = function() {
-          _paused = !0, _parser.abort(), _input = isFunction(_config.chunk) ? "" : _input.substring(_parser.getCharIndex());
-        }, this.resume = function() {
-          self2.streamer._halted ? (_paused = !1, self2.streamer.parseChunk(_input, !0)) : setTimeout(self2.resume, 3);
-        }, this.aborted = function() {
-          return _aborted;
-        }, this.abort = function() {
-          _aborted = !0, _parser.abort(), _results.meta.aborted = !0, isFunction(_config.complete) && _config.complete(_results), _input = "";
-        }, this.guessLineEndings = function(input, quoteChar) {
-          input = input.substring(0, 1024 * 1024);
-          var re = new RegExp(escapeRegExp(quoteChar) + "([^]*?)" + escapeRegExp(quoteChar), "gm");
-          input = input.replace(re, "");
-          var r = input.split("\r"), n = input.split(`
-`), nAppearsFirst = n.length > 1 && n[0].length < r[0].length;
-          if (r.length === 1 || nAppearsFirst)
-            return `
-`;
-          for (var numWithN = 0, i = 0; i < r.length; i++)
-            r[i][0] === `
-` && numWithN++;
-          return numWithN >= r.length / 2 ? `\r
-` : "\r";
-        };
-        function testEmptyLine(s) {
-          return _config.skipEmptyLines === "greedy" ? s.join("").trim() === "" : s.length === 1 && s[0].length === 0;
-        }
-        function testFloat(s) {
-          if (FLOAT.test(s)) {
-            var floatValue = parseFloat(s);
-            if (floatValue > MIN_FLOAT && floatValue < MAX_FLOAT)
-              return !0;
-          }
-          return !1;
-        }
-        function processResults() {
-          return _results && _delimiterError && (addError("Delimiter", "UndetectableDelimiter", "Unable to auto-detect delimiting character; defaulted to '" + Papa2.DefaultDelimiter + "'"), _delimiterError = !1), _config.skipEmptyLines && (_results.data = _results.data.filter(function(d) {
-            return !testEmptyLine(d);
-          })), needsHeaderRow() && fillHeaderFields(), applyHeaderAndDynamicTypingAndTransformation();
-        }
-        function needsHeaderRow() {
-          return _config.header && _fields.length === 0;
-        }
-        function fillHeaderFields() {
-          if (!_results)
-            return;
-          function addHeader(header) {
-            _fields.push(header);
-          }
-          if (Array.isArray(_results.data[0])) {
-            for (var i = 0; needsHeaderRow() && i < _results.data.length; i++)
-              _results.data[i].forEach(addHeader);
-            _results.data.splice(0, 1);
-          } else
-            _results.data.forEach(addHeader);
-        }
-        function shouldApplyDynamicTyping(field) {
-          return _config.dynamicTypingFunction && _config.dynamicTyping[field] === void 0 && (_config.dynamicTyping[field] = _config.dynamicTypingFunction(field)), (_config.dynamicTyping[field] || _config.dynamicTyping) === !0;
-        }
-        function parseDynamic(field, value) {
-          return shouldApplyDynamicTyping(field) ? value === "true" || value === "TRUE" ? !0 : value === "false" || value === "FALSE" ? !1 : testFloat(value) ? parseFloat(value) : ISO_DATE.test(value) ? new Date(value) : value === "" ? null : value : value;
-        }
-        function applyHeaderAndDynamicTypingAndTransformation() {
-          if (!_results || !_config.header && !_config.dynamicTyping && !_config.transform)
-            return _results;
-          function processRow(rowSource, i) {
-            var row = _config.header ? {} : [], j;
-            for (j = 0; j < rowSource.length; j++) {
-              var field = j, value = rowSource[j];
-              _config.header && (field = j >= _fields.length ? "__parsed_extra" : _fields[j]), _config.transform && (value = _config.transform(value, field)), value = parseDynamic(field, value), field === "__parsed_extra" ? (row[field] = row[field] || [], row[field].push(value)) : row[field] = value;
-            }
-            return _config.header && (j > _fields.length ? addError("FieldMismatch", "TooManyFields", "Too many fields: expected " + _fields.length + " fields but parsed " + j, _rowCounter + i) : j < _fields.length && addError("FieldMismatch", "TooFewFields", "Too few fields: expected " + _fields.length + " fields but parsed " + j, _rowCounter + i)), row;
-          }
-          var incrementBy = 1;
-          return !_results.data.length || Array.isArray(_results.data[0]) ? (_results.data = _results.data.map(processRow), incrementBy = _results.data.length) : _results.data = processRow(_results.data, 0), _config.header && _results.meta && (_results.meta.fields = _fields), _rowCounter += incrementBy, _results;
-        }
-        function guessDelimiter(input, newline, skipEmptyLines, comments, delimitersToGuess) {
-          var bestDelim, bestDelta, fieldCountPrevRow, maxFieldCount;
-          delimitersToGuess = delimitersToGuess || [",", "	", "|", ";", Papa2.RECORD_SEP, Papa2.UNIT_SEP];
-          for (var i = 0; i < delimitersToGuess.length; i++) {
-            var delim = delimitersToGuess[i], delta = 0, avgFieldCount = 0, emptyLinesCount = 0;
-            fieldCountPrevRow = void 0;
-            for (var preview = new Parser({
-              comments,
-              delimiter: delim,
-              newline,
-              preview: 10
-            }).parse(input), j = 0; j < preview.data.length; j++) {
-              if (skipEmptyLines && testEmptyLine(preview.data[j])) {
-                emptyLinesCount++;
-                continue;
-              }
-              var fieldCount = preview.data[j].length;
-              if (avgFieldCount += fieldCount, typeof fieldCountPrevRow > "u") {
-                fieldCountPrevRow = fieldCount;
-                continue;
-              } else fieldCount > 0 && (delta += Math.abs(fieldCount - fieldCountPrevRow), fieldCountPrevRow = fieldCount);
-            }
-            preview.data.length > 0 && (avgFieldCount /= preview.data.length - emptyLinesCount), avgFieldCount > 1.99 && (typeof bestDelta > "u" || delta < bestDelta || delta === bestDelta && avgFieldCount > maxFieldCount) && (bestDelta = delta, bestDelim = delim, maxFieldCount = avgFieldCount);
-          }
-          return _config.delimiter = bestDelim, {
-            successful: !!bestDelim,
-            bestDelimiter: bestDelim
-          };
-        }
-        function addError(type, code, msg, row) {
-          var error = {
-            type,
-            code,
-            message: msg
-          };
-          row !== void 0 && (error.row = row), _results.errors.push(error);
-        }
-      }
-      function escapeRegExp(string) {
-        return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      }
-      function Parser(config) {
-        config = config || {};
-        var delim = config.delimiter, newline = config.newline, comments = config.comments, step = config.step, preview = config.preview, fastMode = config.fastMode, quoteChar, renamedHeaders = null, headerParsed = !1;
-        config.quoteChar === void 0 || config.quoteChar === null ? quoteChar = '"' : quoteChar = config.quoteChar;
-        var escapeChar = quoteChar;
-        if (config.escapeChar !== void 0 && (escapeChar = config.escapeChar), (typeof delim != "string" || Papa2.BAD_DELIMITERS.indexOf(delim) > -1) && (delim = ","), comments === delim)
-          throw new Error("Comment character same as delimiter");
-        comments === !0 ? comments = "#" : (typeof comments != "string" || Papa2.BAD_DELIMITERS.indexOf(comments) > -1) && (comments = !1), newline !== `
-` && newline !== "\r" && newline !== `\r
-` && (newline = `
-`);
-        var cursor = 0, aborted = !1;
-        this.parse = function(input, baseIndex, ignoreLastRow) {
-          if (typeof input != "string")
-            throw new Error("Input must be a string");
-          var inputLen = input.length, delimLen = delim.length, newlineLen = newline.length, commentsLen = comments.length, stepIsFunction = isFunction(step);
-          cursor = 0;
-          var data = [], errors = [], row = [], lastCursor = 0;
-          if (!input)
-            return returnable();
-          if (fastMode || fastMode !== !1 && input.indexOf(quoteChar) === -1) {
-            for (var rows = input.split(newline), i = 0; i < rows.length; i++) {
-              if (row = rows[i], cursor += row.length, i !== rows.length - 1)
-                cursor += newline.length;
-              else if (ignoreLastRow)
-                return returnable();
-              if (!(comments && row.substring(0, commentsLen) === comments)) {
-                if (stepIsFunction) {
-                  if (data = [], pushRow(row.split(delim)), doStep(), aborted)
-                    return returnable();
-                } else
-                  pushRow(row.split(delim));
-                if (preview && i >= preview)
-                  return data = data.slice(0, preview), returnable(!0);
-              }
-            }
-            return returnable();
-          }
-          for (var nextDelim = input.indexOf(delim, cursor), nextNewline = input.indexOf(newline, cursor), quoteCharRegex = new RegExp(escapeRegExp(escapeChar) + escapeRegExp(quoteChar), "g"), quoteSearch = input.indexOf(quoteChar, cursor); ; ) {
-            if (input[cursor] === quoteChar) {
-              for (quoteSearch = cursor, cursor++; ; ) {
-                if (quoteSearch = input.indexOf(quoteChar, quoteSearch + 1), quoteSearch === -1)
-                  return ignoreLastRow || errors.push({
-                    type: "Quotes",
-                    code: "MissingQuotes",
-                    message: "Quoted field unterminated",
-                    row: data.length,
-                    // row has yet to be inserted
-                    index: cursor
-                  }), finish();
-                if (quoteSearch === inputLen - 1) {
-                  var value = input.substring(cursor, quoteSearch).replace(quoteCharRegex, quoteChar);
-                  return finish(value);
-                }
-                if (quoteChar === escapeChar && input[quoteSearch + 1] === escapeChar) {
-                  quoteSearch++;
-                  continue;
-                }
-                if (!(quoteChar !== escapeChar && quoteSearch !== 0 && input[quoteSearch - 1] === escapeChar)) {
-                  nextDelim !== -1 && nextDelim < quoteSearch + 1 && (nextDelim = input.indexOf(delim, quoteSearch + 1)), nextNewline !== -1 && nextNewline < quoteSearch + 1 && (nextNewline = input.indexOf(newline, quoteSearch + 1));
-                  var checkUpTo = nextNewline === -1 ? nextDelim : Math.min(nextDelim, nextNewline), spacesBetweenQuoteAndDelimiter = extraSpaces(checkUpTo);
-                  if (input.substr(quoteSearch + 1 + spacesBetweenQuoteAndDelimiter, delimLen) === delim) {
-                    row.push(input.substring(cursor, quoteSearch).replace(quoteCharRegex, quoteChar)), cursor = quoteSearch + 1 + spacesBetweenQuoteAndDelimiter + delimLen, input[quoteSearch + 1 + spacesBetweenQuoteAndDelimiter + delimLen] !== quoteChar && (quoteSearch = input.indexOf(quoteChar, cursor)), nextDelim = input.indexOf(delim, cursor), nextNewline = input.indexOf(newline, cursor);
-                    break;
-                  }
-                  var spacesBetweenQuoteAndNewLine = extraSpaces(nextNewline);
-                  if (input.substring(quoteSearch + 1 + spacesBetweenQuoteAndNewLine, quoteSearch + 1 + spacesBetweenQuoteAndNewLine + newlineLen) === newline) {
-                    if (row.push(input.substring(cursor, quoteSearch).replace(quoteCharRegex, quoteChar)), saveRow(quoteSearch + 1 + spacesBetweenQuoteAndNewLine + newlineLen), nextDelim = input.indexOf(delim, cursor), quoteSearch = input.indexOf(quoteChar, cursor), stepIsFunction && (doStep(), aborted))
-                      return returnable();
-                    if (preview && data.length >= preview)
-                      return returnable(!0);
-                    break;
-                  }
-                  errors.push({
-                    type: "Quotes",
-                    code: "InvalidQuotes",
-                    message: "Trailing quote on quoted field is malformed",
-                    row: data.length,
-                    // row has yet to be inserted
-                    index: cursor
-                  }), quoteSearch++;
-                }
-              }
-              continue;
-            }
-            if (comments && row.length === 0 && input.substring(cursor, cursor + commentsLen) === comments) {
-              if (nextNewline === -1)
-                return returnable();
-              cursor = nextNewline + newlineLen, nextNewline = input.indexOf(newline, cursor), nextDelim = input.indexOf(delim, cursor);
-              continue;
-            }
-            if (nextDelim !== -1 && (nextDelim < nextNewline || nextNewline === -1)) {
-              row.push(input.substring(cursor, nextDelim)), cursor = nextDelim + delimLen, nextDelim = input.indexOf(delim, cursor);
-              continue;
-            }
-            if (nextNewline !== -1) {
-              if (row.push(input.substring(cursor, nextNewline)), saveRow(nextNewline + newlineLen), stepIsFunction && (doStep(), aborted))
-                return returnable();
-              if (preview && data.length >= preview)
-                return returnable(!0);
-              continue;
-            }
-            break;
-          }
-          return finish();
-          function pushRow(row2) {
-            data.push(row2), lastCursor = cursor;
-          }
-          function extraSpaces(index) {
-            var spaceLength = 0;
-            if (index !== -1) {
-              var textBetweenClosingQuoteAndIndex = input.substring(quoteSearch + 1, index);
-              textBetweenClosingQuoteAndIndex && textBetweenClosingQuoteAndIndex.trim() === "" && (spaceLength = textBetweenClosingQuoteAndIndex.length);
-            }
-            return spaceLength;
-          }
-          function finish(value2) {
-            return ignoreLastRow || (typeof value2 > "u" && (value2 = input.substring(cursor)), row.push(value2), cursor = inputLen, pushRow(row), stepIsFunction && doStep()), returnable();
-          }
-          function saveRow(newCursor) {
-            cursor = newCursor, pushRow(row), row = [], nextNewline = input.indexOf(newline, cursor);
-          }
-          function returnable(stopped) {
-            if (config.header && !baseIndex && data.length && !headerParsed) {
-              let result = data[0], headerCount = /* @__PURE__ */ Object.create(null), usedHeaders = new Set(result), duplicateHeaders = !1;
-              for (let i2 = 0; i2 < result.length; i2++) {
-                let header = stripBom(result[i2]);
-                if (isFunction(config.transformHeader) && (header = config.transformHeader(header, i2)), !headerCount[header])
-                  headerCount[header] = 1, result[i2] = header;
-                else {
-                  let newHeader, suffixCount = headerCount[header];
-                  do
-                    newHeader = `${header}_${suffixCount}`, suffixCount++;
-                  while (usedHeaders.has(newHeader));
-                  usedHeaders.add(newHeader), result[i2] = newHeader, headerCount[header]++, duplicateHeaders = !0, renamedHeaders === null && (renamedHeaders = {}), renamedHeaders[newHeader] = header;
-                }
-                usedHeaders.add(header);
-              }
-              duplicateHeaders && console.warn("Duplicate headers found and renamed."), headerParsed = !0;
-            }
-            return {
-              data,
-              errors,
-              meta: {
-                delimiter: delim,
-                linebreak: newline,
-                aborted,
-                truncated: !!stopped,
-                cursor: lastCursor + (baseIndex || 0),
-                renamedHeaders
-              }
-            };
-          }
-          function doStep() {
-            step(returnable()), data = [], errors = [];
-          }
-        }, this.abort = function() {
-          aborted = !0;
-        }, this.getCharIndex = function() {
-          return cursor;
-        };
-      }
-      function newWorker() {
-        if (!Papa2.WORKERS_SUPPORTED)
-          return !1;
-        var workerUrl = getWorkerBlob(), w = new global2.Worker(workerUrl);
-        return w.onmessage = mainThreadReceivedMessage, w.id = workerIdCounter++, workers[w.id] = w, w;
-      }
-      function mainThreadReceivedMessage(e) {
-        var msg = e.data, worker = workers[msg.workerId], aborted = !1;
-        if (msg.error)
-          worker.userError(msg.error, msg.file);
-        else if (msg.results && msg.results.data) {
-          var abort = function() {
-            aborted = !0, completeWorker(msg.workerId, { data: [], errors: [], meta: { aborted: !0 } });
-          }, handle = {
-            abort,
-            pause: notImplemented,
-            resume: notImplemented
-          };
-          if (isFunction(worker.userStep)) {
-            for (var i = 0; i < msg.results.data.length && (worker.userStep({
-              data: msg.results.data[i],
-              errors: msg.results.errors,
-              meta: msg.results.meta
-            }, handle), !aborted); i++)
-              ;
-            delete msg.results;
-          } else isFunction(worker.userChunk) && (worker.userChunk(msg.results, handle, msg.file), delete msg.results);
-        }
-        msg.finished && !aborted && completeWorker(msg.workerId, msg.results);
-      }
-      function completeWorker(workerId, results) {
-        var worker = workers[workerId];
-        isFunction(worker.userComplete) && worker.userComplete(results), worker.terminate(), delete workers[workerId];
-      }
-      function notImplemented() {
-        throw new Error("Not implemented.");
-      }
-      function workerThreadReceivedMessage(e) {
-        var msg = e.data;
-        if (typeof Papa2.WORKER_ID > "u" && msg && (Papa2.WORKER_ID = msg.workerId), typeof msg.input == "string")
-          global2.postMessage({
-            workerId: Papa2.WORKER_ID,
-            results: Papa2.parse(msg.input, msg.config),
-            finished: !0
-          });
-        else if (global2.File && msg.input instanceof File || msg.input instanceof Object) {
-          var results = Papa2.parse(msg.input, msg.config);
-          results && global2.postMessage({
-            workerId: Papa2.WORKER_ID,
-            results,
-            finished: !0
-          });
-        }
-      }
-      function copy(obj) {
-        if (typeof obj != "object" || obj === null)
-          return obj;
-        var cpy = Array.isArray(obj) ? [] : {};
-        for (var key in obj)
-          cpy[key] = copy(obj[key]);
-        return cpy;
-      }
-      function bindFunction(f, self2) {
-        return function() {
-          f.apply(self2, arguments);
-        };
-      }
-      function isFunction(func) {
-        return typeof func == "function";
-      }
-      return Papa2;
-    });
-  }
-});
-
 // src/lib/dataParser.ts
 function parseCSV(csvText) {
   return new Promise((resolve, reject) => {
@@ -14995,14 +14995,14 @@ async function publicarProjetos(opts) {
     dashboards.forEach((d) => {
       ids.add(d.datasetId), (d.charts || []).forEach((c) => c.datasetId && ids.add(c.datasetId));
     });
-    let datasets = (await Promise.all([...ids].map((id) => opts.source.loadDataset(id)))).filter(Boolean), recordsMap = Object.fromEntries(datasets.map((d) => [d.id, d.records || []])), marcas = [p.updatedAt, ...dashboards.map((d) => d.updatedAt), ...datasets.map((d) => d.lastSyncedAt || d.updatedAt)].filter(Boolean).sort(), now = new Date(marcas[marcas.length - 1] || "2026-01-01T00:00:00Z"), site = buildProjectSite(p, dashboards, datasets, recordsMap, p.headerConfig, { vendor: opts.vendor, now }), slug = slugProjeto(p), h = createHash2("sha256");
+    let datasets = (await Promise.all([...ids].map((id) => opts.source.loadDataset(id)))).filter(Boolean), recordsMap = Object.fromEntries(datasets.map((d) => [d.id, d.records || []])), marcas = [p.updatedAt, ...dashboards.map((d) => d.updatedAt), ...datasets.map((d) => d.lastSyncedAt || d.updatedAt)].filter(Boolean).sort(), now = new Date(marcas[marcas.length - 1] || "2026-01-01T00:00:00Z"), site = buildProjectSite(p, dashboards, datasets, recordsMap, p.headerConfig, { vendor: opts.vendor, now }), slug2 = slugProjeto(p), h = createHash2("sha256");
     for (let f of site.files.sort((a, b) => a.path.localeCompare(b.path))) {
-      let path = join3(opts.saida, slug, f.path);
+      let path = join3(opts.saida, slug2, f.path);
       mkdirSync2(dirname2(path), { recursive: !0 }), writeFileSync2(path, f.base64 ? Buffer.from(f.content, "base64") : f.content), h.update(f.path).update(f.content);
     }
-    novo[slug] = h.digest("hex");
-    let mudou = anterior[slug] !== novo[slug];
-    res.mudou = res.mudou || mudou, res.projetos.push({ id: p.id, nome: p.name, slug, paginas: site.pages.length, mudou });
+    novo[slug2] = h.digest("hex");
+    let mudou = anterior[slug2] !== novo[slug2];
+    res.mudou = res.mudou || mudou, res.projetos.push({ id: p.id, nome: p.name, slug: slug2, paginas: site.pages.length, mudou });
   }
   Object.keys(anterior).some((k) => !(k in novo)) && (res.mudou = !0);
   let esc2 = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
@@ -15164,7 +15164,9 @@ function fonteParada(f, estado, now) {
 }
 
 // automation/pipeline.ts
+var import_papaparse2 = __toESM(require_papaparse(), 1);
 import { createHash } from "crypto";
+import { gzipSync } from "zlib";
 import { existsSync as existsSync2, mkdirSync, readFileSync as readFileSync2, writeFileSync } from "fs";
 import { basename as basename2, dirname, join as join2 } from "path";
 
@@ -15250,12 +15252,128 @@ async function lerXlsx(buf, opts = {}) {
   return registros;
 }
 
+// automation/tratador.ts
+function numeroBr(v) {
+  if (typeof v == "number") return isFinite(v) ? v : null;
+  if (v == null) return null;
+  let s = String(v).trim().replace(/^R\$\s*/i, "").replace(/\s|%/g, "");
+  if (s === "" || s === "-") return null;
+  /^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s) || /^-?\d+,\d+$/.test(s) ? s = s.replace(/\./g, "").replace(",", ".") : /^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s) && (s = s.replace(/,/g, ""));
+  let n = Number(s);
+  return isFinite(n) ? n : null;
+}
+var normalizarNome = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(), Tratador = class {
+  constructor(t, municipios = [], agora = /* @__PURE__ */ new Date()) {
+    this.t = t;
+    this.linhas = [];
+    this.grupos = /* @__PURE__ */ new Map();
+    this.naoReconhecidos = /* @__PURE__ */ new Set();
+    this.codigos = /* @__PURE__ */ new Map();
+    this.descartadosMes = 0;
+    this.nLinhas = 0;
+    this.porNome = new Map(municipios.map((m) => [normalizarNome(m.nome), m]));
+    let brt2 = new Date(agora.getTime() - 3 * 36e5);
+    this.anoAtual = brt2.getUTCFullYear(), this.mesAtual = brt2.getUTCMonth() + 1;
+  }
+  /** Houve linhas do mês em andamento descartadas? (o resultado vale só neste mês) */
+  get descartouMesEmAndamento() {
+    return this.descartadosMes > 0;
+  }
+  /** Trata uma linha; devolve null se ela deve ser descartada. */
+  linha(r) {
+    let t = this.t;
+    if (!t) return r;
+    if (t.filtrar) {
+      for (let [col, val] of Object.entries(t.filtrar))
+        if (!(Array.isArray(val) ? val : [val]).map((x) => String(x)).includes(String(r[col] ?? "").trim())) return null;
+    }
+    let ren = t.renomear || {}, o = {};
+    for (let k in r) o[ren[k] || k] = r[k];
+    for (let c of t.texto || []) typeof o[c] == "string" && (o[c] = o[c].replace(/\s+/g, " ").trim());
+    for (let c of t.numeros || []) c in o && (o[c] = numeroBr(o[c]));
+    for (let c of t.inteiros || []) if (c in o) {
+      let n = numeroBr(o[c]);
+      o[c] = n === null ? null : Math.round(n);
+    }
+    if (t.municipio && t.municipio.coluna in o) {
+      let m = this.porNome.get(normalizarNome(o[t.municipio.coluna]));
+      m ? (o[t.municipio.coluna] = m.nome, t.municipio.codigo_ibge && (o[t.municipio.codigo_ibge] = m.codigo)) : o[t.municipio.coluna] && (this.porNome.size && this.naoReconhecidos.add(String(o[t.municipio.coluna])), t.municipio.codigo_ibge && (o[t.municipio.codigo_ibge] = null)), t.municipio.codigo_ibge && this.codigos.set(String(o[t.municipio.coluna]), o[t.municipio.codigo_ibge] ?? null);
+    }
+    for (let c of t.descartar_vazias || []) if (o[c] === null || o[c] === void 0 || String(o[c]).trim() === "") return null;
+    if (t.descartar_mes_em_andamento) {
+      let { ano, mes } = t.descartar_mes_em_andamento;
+      if (Number(o[ano]) === this.anoAtual && Number(o[mes]) === this.mesAtual)
+        return this.descartadosMes++, null;
+    }
+    return o;
+  }
+  adicionar(o) {
+    if (!o) return;
+    this.nLinhas++;
+    let g = this.t?.agrupar;
+    if (!g || !g.por?.length) {
+      this.linhas.push(o);
+      return;
+    }
+    let chave = JSON.stringify(g.por.map((c) => o[c] ?? null)), e = this.grupos.get(chave);
+    e || (e = { base: Object.fromEntries(g.por.map((c) => [c, o[c] ?? null])), soma: {}, nMedia: {}, n: 0 }, this.grupos.set(chave, e)), e.n++;
+    for (let c of [...g.somar || [], ...g.media || []]) {
+      let v = typeof o[c] == "number" ? o[c] : numeroBr(o[c]);
+      v !== null && (e.soma[c] = (e.soma[c] || 0) + v, e.nMedia[c] = (e.nMedia[c] || 0) + 1);
+    }
+  }
+  parcial() {
+    return {
+      versao: 1,
+      ...this.t?.agrupar?.por?.length ? { grupos: [...this.grupos.entries()] } : { linhas: this.linhas },
+      naoReconhecidos: [...this.naoReconhecidos],
+      codigos: [...this.codigos.entries()],
+      descartadosMes: this.descartadosMes,
+      nLinhas: this.nLinhas
+    };
+  }
+  mesclar(p) {
+    for (let [chave, g] of p.grupos || []) {
+      let e = this.grupos.get(chave);
+      if (!e) {
+        this.grupos.set(chave, { base: { ...g.base }, soma: { ...g.soma }, nMedia: { ...g.nMedia }, n: g.n });
+        continue;
+      }
+      e.n += g.n;
+      for (let c in g.soma) e.soma[c] = (e.soma[c] || 0) + g.soma[c];
+      for (let c in g.nMedia) e.nMedia[c] = (e.nMedia[c] || 0) + g.nMedia[c];
+    }
+    for (let r of p.linhas || []) this.linhas.push(r);
+    for (let n of p.naoReconhecidos) this.naoReconhecidos.add(n);
+    for (let [k, v] of p.codigos) this.codigos.set(k, v);
+    this.descartadosMes += p.descartadosMes, this.nLinhas += p.nLinhas;
+  }
+  finalizar() {
+    let t = this.t, avisos = [], out, g = t?.agrupar;
+    if (g && g.por?.length ? (out = [...this.grupos.values()].map((e) => {
+      let o = { ...e.base };
+      t.municipio?.codigo_ibge && !g.por.includes(t.municipio.codigo_ibge) && g.por.includes(t.municipio.coluna) && (o[t.municipio.codigo_ibge] = this.codigos.get(String(e.base[t.municipio.coluna])) ?? null);
+      for (let c of g.somar || []) o[c] = Math.round((e.soma[c] || 0) * 100) / 100;
+      for (let c of g.media || []) o[c] = e.nMedia[c] ? Math.round(e.soma[c] / e.nMedia[c] * 100) / 100 : null;
+      return g.contar && (o[g.contar] = e.n), o;
+    }), avisos.push(`Agrupado: ${this.nLinhas.toLocaleString("pt-BR")} linhas viraram ${out.length.toLocaleString("pt-BR")} (por ${g.por.join(", ")}).`)) : out = this.linhas, t?.manter && t.manter.length) {
+      let keep = [...t.manter, ...t.municipio?.codigo_ibge ? [t.municipio.codigo_ibge] : []];
+      out = out.map((r) => Object.fromEntries(keep.filter((k) => k in r).map((k) => [k, r[k]])));
+    }
+    if (this.descartadosMes && avisos.push(`Agrupado-info: ${this.descartadosMes} ${this.descartadosMes === 1 ? "lan\xE7amento" : "lan\xE7amentos"} do m\xEAs em andamento (${String(this.mesAtual).padStart(2, "0")}/${this.anoAtual}) ${this.descartadosMes === 1 ? "ficou" : "ficaram"} de fora.`), this.naoReconhecidos.size) {
+      let lista = [...this.naoReconhecidos];
+      avisos.push(`Munic\xEDpios n\xE3o reconhecidos (mantidos como vieram, sem c\xF3digo IBGE): ${lista.slice(0, 10).join(", ")}${lista.length > 10 ? "\u2026" : ""}`);
+    }
+    return { registros: out, avisos };
+  }
+};
+
 // automation/pipeline.ts
 init_syncCore();
 init_syncSchedule();
 init_dataParser();
 init_dashboardFilters();
-var MAX_BYTES = 100 * 1024 * 1024, MAX_BRUTO_NO_REPO = 90 * 1024 * 1024, fetchPadrao = async (url) => {
+var MAX_BYTES = 1024 * 1024 * 1024, MAX_BRUTO_NO_REPO = 90 * 1024 * 1024, fetchPadrao = async (url) => {
   let ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 12e4);
   try {
     let res = await fetch(url, { redirect: "follow", signal: ctrl.signal, headers: { "User-Agent": "DataDash-Automacao/1.0 (+jornalismo de dados)" } }), len = Number(res.headers.get("content-length") || 0);
@@ -15314,47 +15432,6 @@ async function baixarParte(f, nome, url, fetcher) {
     throw new Error(`a URL devolveu uma p\xE1gina da web, n\xE3o um arquivo de dados (o endere\xE7o pode ter mudado): ${url}`);
   return { nome, body: res.body, formato: detectarFormato(f, res.body, res.finalUrl), finalUrl: res.finalUrl, hash: sha256(res.body) };
 }
-async function coletar(f, estado, dir, now, fetcher) {
-  let partes = [];
-  if (f.arquivo) {
-    let caminho = join2(dir, f.arquivo);
-    if (!existsSync2(caminho)) throw new Error(`planilha n\xE3o encontrada em ${f.arquivo}. Envie o arquivo pelo site do GitHub para essa pasta, com esse nome.`);
-    let body = readFileSync2(caminho);
-    if (!body.length) throw new Error(`a planilha ${f.arquivo} est\xE1 vazia`);
-    partes.push({ nome: basename2(f.arquivo), body, formato: detectarFormato(f, body, f.arquivo), finalUrl: f.arquivo, hash: sha256(body) });
-  } else {
-    let alvos = f.ckan ? (await recursosCkan(f, now, fetcher)).map((r) => ({ nome: r.nome, url: r.url })) : [{ nome: f.id, url: resolverUrl(f.url || "", now) }];
-    for (let a of alvos) partes.push(await baixarParte(f, a.nome, a.url, fetcher));
-  }
-  let hashes = Object.fromEntries(partes.map((p) => [p.nome, p.hash])), hash = partes.length === 1 ? partes[0].hash : sha256(partes.map((p) => `${p.nome}:${p.hash}`).sort().join("|"));
-  if (estado?.hash === hash) return { mudou: !1, partes, hash, hashes, arquivosBrutos: [] };
-  let arquivosBrutos = [], avisos = [], stamp = carimbo(now);
-  for (let p of partes) {
-    if (f.dados_pessoais) continue;
-    if (f.arquivo) {
-      arquivosBrutos.push(f.arquivo);
-      continue;
-    }
-    if (estado?.hashes?.[p.nome] === p.hash) continue;
-    if (p.body.length > MAX_BRUTO_NO_REPO) {
-      avisos.push(`"${p.nome}" tem ${Math.round(p.body.length / 1048576)} MB: grande demais para guardar no reposit\xF3rio; o bruto desta coleta n\xE3o foi arquivado.`);
-      continue;
-    }
-    let sufixo = partes.length > 1 ? "__" + normalizarNome(p.nome).replace(/ /g, "-").slice(0, 40) : "", rel = join2("bruto", pastaFonte(f), stamp.slice(0, 4), `${stamp}${sufixo}.${p.formato}`);
-    mkdirSync(dirname(join2(dir, rel)), { recursive: !0 }), writeFileSync(join2(dir, rel), p.body), arquivosBrutos.push(rel);
-  }
-  return { mudou: !0, partes, hash, hashes, arquivosBrutos, aviso: avisos.join(" ") || void 0 };
-}
-function numeroBr(v) {
-  if (typeof v == "number") return isFinite(v) ? v : null;
-  if (v == null) return null;
-  let s = String(v).trim().replace(/^R\$\s*/i, "").replace(/\s|%/g, "");
-  if (s === "" || s === "-") return null;
-  /^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s) || /^-?\d+,\d+$/.test(s) ? s = s.replace(/\./g, "").replace(",", ".") : /^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s) && (s = s.replace(/,/g, ""));
-  let n = Number(s);
-  return isFinite(n) ? n : null;
-}
-var normalizarNome = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 async function carregarMunicipios(dir, fetcher) {
   let path = join2(dir, "referencias", "municipios-es.json");
   if (existsSync2(path)) return JSON.parse(readFileSync2(path, "utf-8"));
@@ -15364,76 +15441,105 @@ async function carregarMunicipios(dir, fetcher) {
   if (lista.length < 70) throw new Error(`lista do IBGE incompleta (${lista.length} munic\xEDpios)`);
   return mkdirSync(dirname(path), { recursive: !0 }), writeFileSync(path, JSON.stringify(lista, null, 2)), lista;
 }
-function aplicarTratamento(registros, t, municipios = [], agora = /* @__PURE__ */ new Date()) {
-  let avisos = [];
-  if (!t) return { registros, avisos };
-  let out = registros;
-  t.filtrar && (out = out.filter((r) => Object.entries(t.filtrar).every(([col, val]) => (Array.isArray(val) ? val : [val]).map((x) => String(x)).includes(String(r[col] ?? "").trim()))));
-  let ren = t.renomear || {}, porNome = new Map(municipios.map((m) => [normalizarNome(m.nome), m])), naoReconhecidos = /* @__PURE__ */ new Set();
-  out = out.map((r) => {
-    let o = {};
-    for (let [k, v] of Object.entries(r)) o[ren[k] || k] = v;
-    for (let c of t.texto || []) typeof o[c] == "string" && (o[c] = o[c].replace(/\s+/g, " ").trim());
-    for (let c of t.numeros || []) c in o && (o[c] = numeroBr(o[c]));
-    for (let c of t.inteiros || []) if (c in o) {
-      let n = numeroBr(o[c]);
-      o[c] = n === null ? null : Math.round(n);
-    }
-    if (t.municipio && t.municipio.coluna in o) {
-      let m = porNome.get(normalizarNome(o[t.municipio.coluna]));
-      m ? (o[t.municipio.coluna] = m.nome, t.municipio.codigo_ibge && (o[t.municipio.codigo_ibge] = m.codigo)) : o[t.municipio.coluna] && (naoReconhecidos.add(String(o[t.municipio.coluna])), t.municipio.codigo_ibge && (o[t.municipio.codigo_ibge] = null));
-    }
-    return o;
-  });
-  for (let c of t.descartar_vazias || []) out = out.filter((r) => r[c] !== null && r[c] !== void 0 && String(r[c]).trim() !== "");
-  if (t.descartar_mes_em_andamento) {
-    let { ano, mes } = t.descartar_mes_em_andamento, brt2 = new Date(agora.getTime() - 3 * 36e5), anoAtual = brt2.getUTCFullYear(), mesAtual = brt2.getUTCMonth() + 1, antes = out.length;
-    out = out.filter((r) => !(Number(r[ano]) === anoAtual && Number(r[mes]) === mesAtual)), out.length < antes && avisos.push(`Agrupado-info: ${antes - out.length} ${antes - out.length === 1 ? "lan\xE7amento" : "lan\xE7amentos"} do m\xEAs em andamento (${String(mesAtual).padStart(2, "0")}/${anoAtual}) ${antes - out.length === 1 ? "ficou" : "ficaram"} de fora.`);
+function decodificar2(body) {
+  let txt = body.toString("utf-8");
+  return (txt.slice(0, 2e5).match(/\uFFFD/g) || []).length > 5 && (txt = body.toString("latin1")), txt.charCodeAt(0) === 65279 ? txt.slice(1) : txt;
+}
+async function lerLinhas(f, body, formato, aoLer) {
+  let n = 0;
+  if (formato === "csv") {
+    let erro = null;
+    if (import_papaparse2.default.parse(decodificar2(body), {
+      header: !0,
+      skipEmptyLines: "greedy",
+      dynamicTyping: !0,
+      delimitersToGuess: [";", "	", ",", "|"],
+      transformHeader: (h) => h.trim(),
+      step: (res) => {
+        if (!erro)
+          try {
+            n++, aoLer(res.data);
+          } catch (e) {
+            erro = e;
+          }
+      }
+    }), erro) throw erro;
+    return n;
   }
-  if (t.agrupar && t.agrupar.por?.length) {
-    let g = t.agrupar, grupos = /* @__PURE__ */ new Map();
-    for (let r of out) {
-      let chave = JSON.stringify(g.por.map((c) => r[c] ?? null)), e = grupos.get(chave);
-      e || (e = { base: Object.fromEntries(g.por.map((c) => [c, r[c] ?? null])), soma: {}, nMedia: {}, n: 0 }, grupos.set(chave, e)), e.n++;
-      for (let c of [...g.somar || [], ...g.media || []]) {
-        let v = typeof r[c] == "number" ? r[c] : numeroBr(r[c]);
-        v !== null && (e.soma[c] = (e.soma[c] || 0) + v, e.nMedia[c] = (e.nMedia[c] || 0) + 1);
+  let recs;
+  if (formato === "xlsx") recs = await lerXlsx(body, { planilha: f.planilha, linhaCabecalho: f.linha_cabecalho });
+  else {
+    let payload = formato === "zip" ? { isZip: !0, arrayBuffer: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength), isCsv: !1, rawText: "" } : { isZip: !1, isCsv: !1, rawText: body.toString("utf-8"), data: JSON.parse(decodificar2(body)) };
+    recs = await recordsFromPayload(payload, { zipInternalFile: f.arquivo_no_zip, jsonPath: f.caminho_json });
+  }
+  for (let r of recs)
+    n++, aoLer(r);
+  return n;
+}
+var slug = (s) => normalizarNome(s).replace(/ /g, "-").slice(0, 60) || "arquivo";
+async function processarFonte(f, estado, dir, now, fetcher, municipios, opts = {}) {
+  let inicio = opts.inicio ?? Date.now(), prazo = opts.prazoMs ?? 20 * 6e4, brt2 = new Date(now.getTime() - 3 * 36e5), mesAtual = brt2.toISOString().slice(0, 7), cfg = sha256(JSON.stringify({ t: f.tratamento || null, planilha: f.planilha, cab: f.linha_cabecalho, zip: f.arquivo_no_zip, json: f.caminho_json, formato: f.formato })), podeReaproveitar = !!f.tratamento?.agrupar?.por?.length && !f.dados_pessoais, pastaCache = join2(dir, "estado", "cache", pastaFonte(f)), alvos;
+  f.arquivo ? alvos = [{ chave: slug(basename2(f.arquivo)), nome: basename2(f.arquivo), local: f.arquivo }] : f.ckan ? alvos = (await recursosCkan(f, now, fetcher)).map((r) => ({ chave: slug(r.nome), nome: r.nome, url: r.url, atualizadoEm: r.atualizadoEm || void 0 })) : alvos = [{ chave: slug(f.id), nome: f.id, url: resolverUrl(f.url || "", now) }], estado.partes = estado.partes || {};
+  let global2 = new Tratador(f.tratamento, municipios, now), hashes = {}, arquivosBrutos = [], avisos = [], urls = [], baixados = 0, reaproveitados = 0, feitos = 0, lerCache = (chave) => {
+    let arq = join2(pastaCache, `${chave}.json`);
+    if (!podeReaproveitar || !existsSync2(arq)) return null;
+    try {
+      let c = JSON.parse(readFileSync2(arq, "utf-8"));
+      return c.cfg !== cfg || c.mesAndamento && c.mesAndamento !== mesAtual ? null : c.parcial;
+    } catch {
+      return null;
+    }
+  };
+  for (let a of alvos) {
+    let prev = estado.partes[a.chave], anoArquivo = anoDe(a.nome) ?? anoDe(a.url || ""), fechado = anoArquivo !== null && anoArquivo < brt2.getUTCFullYear(), conferidoHaPouco = !!prev?.verificadoEm && now.getTime() - new Date(prev.verificadoEm).getTime() < 30 * 864e5;
+    if (fechado && conferidoHaPouco && a.atualizadoEm && prev?.atualizadoEm === a.atualizadoEm && prev.hash) {
+      let c = lerCache(a.chave);
+      if (c) {
+        global2.mesclar(c), hashes[a.chave] = prev.hash, urls.push(a.url || a.local || ""), reaproveitados++, feitos++;
+        continue;
       }
     }
-    if (t.municipio?.codigo_ibge && !g.por.includes(t.municipio.codigo_ibge) && g.por.includes(t.municipio.coluna)) {
-      let cod = new Map(out.map((r) => [r[t.municipio.coluna], r[t.municipio.codigo_ibge]]));
-      for (let e of grupos.values()) e.base[t.municipio.codigo_ibge] = cod.get(e.base[t.municipio.coluna]) ?? null;
+    if (Date.now() - inicio > prazo) return { mudou: !1, incompleto: { feitos, total: alvos.length }, avisos, hash: estado.hash || "", arquivosBrutos, baixados, reaproveitados };
+    let body, finalUrl;
+    if (a.local) {
+      let caminho = join2(dir, a.local);
+      if (!existsSync2(caminho)) throw new Error(`planilha n\xE3o encontrada em ${a.local}. Envie o arquivo pelo site do GitHub para essa pasta, com esse nome.`);
+      if (body = readFileSync2(caminho), finalUrl = a.local, !body.length) throw new Error(`a planilha ${a.local} est\xE1 vazia`);
+    } else {
+      let p = await baixarParte(f, a.nome, a.url, fetcher);
+      body = p.body, finalUrl = p.finalUrl, baixados++;
     }
-    let antes = out.length;
-    out = [...grupos.values()].map((e) => {
-      let o = { ...e.base };
-      for (let c of g.somar || []) o[c] = Math.round((e.soma[c] || 0) * 100) / 100;
-      for (let c of g.media || []) o[c] = e.nMedia[c] ? Math.round(e.soma[c] / e.nMedia[c] * 100) / 100 : null;
-      return g.contar && (o[g.contar] = e.n), o;
-    }), avisos.push(`Agrupado: ${antes.toLocaleString("pt-BR")} linhas viraram ${out.length.toLocaleString("pt-BR")} (por ${g.por.join(", ")}).`);
+    let formato = detectarFormato(f, body, finalUrl), hash = sha256(body);
+    if (hashes[a.chave] = hash, urls.push(finalUrl), prev?.hash === hash) {
+      let c = lerCache(a.chave);
+      if (c) {
+        global2.mesclar(c), estado.partes[a.chave] = { ...prev, atualizadoEm: a.atualizadoEm, verificadoEm: now.toISOString() }, feitos++;
+        continue;
+      }
+    }
+    if (!f.dados_pessoais && !a.local && prev?.hash !== hash) {
+      let politica = f.bruto || "auto", comprimido = gzipSync(body), mensal = politica === "mensal" || politica === "auto" && comprimido.length > 5 * 1048576;
+      if (politica !== "nunca" && !(mensal && prev?.brutoMes === mesAtual))
+        if (comprimido.length > MAX_BRUTO_NO_REPO) avisos.push(`"${a.nome}" continua grande demais mesmo compactado (${Math.round(comprimido.length / 1048576)} MB); o bruto desta coleta n\xE3o foi arquivado.`);
+        else {
+          let stamp = carimbo(now), sufixo = alvos.length > 1 ? "__" + a.chave.slice(0, 40) : "", rel = join2("bruto", pastaFonte(f), stamp.slice(0, 4), `${stamp}${sufixo}.${formato}.gz`);
+          mkdirSync(dirname(join2(dir, rel)), { recursive: !0 }), writeFileSync(join2(dir, rel), comprimido), arquivosBrutos.push(rel), estado.partes[a.chave] = { ...estado.partes[a.chave] || {}, brutoMes: mesAtual };
+        }
+    }
+    a.local && arquivosBrutos.push(a.local);
+    let tp = new Tratador(f.tratamento, municipios, now);
+    if (!await lerLinhas(f, body, formato, (r) => tp.adicionar(tp.linha(r)))) throw new Error(`nenhum registro lido de "${a.nome}"`);
+    let parcial = tp.parcial();
+    podeReaproveitar && (mkdirSync(pastaCache, { recursive: !0 }), writeFileSync(join2(pastaCache, `${a.chave}.json`), JSON.stringify({ cfg, mesAndamento: tp.descartouMesEmAndamento ? mesAtual : null, parcial }))), global2.mesclar(parcial), estado.partes[a.chave] = { ...estado.partes[a.chave] || {}, hash, atualizadoEm: a.atualizadoEm, verificadoEm: now.toISOString() }, feitos++;
   }
-  if (t.manter && t.manter.length) {
-    let keep = [...t.manter, ...t.municipio?.codigo_ibge ? [t.municipio.codigo_ibge] : []];
-    out = out.map((r) => Object.fromEntries(keep.filter((k) => k in r).map((k) => [k, r[k]])));
-  }
-  return naoReconhecidos.size && municipios.length && avisos.push(`Munic\xEDpios n\xE3o reconhecidos (mantidos como vieram, sem c\xF3digo IBGE): ${[...naoReconhecidos].slice(0, 10).join(", ")}${naoReconhecidos.size > 10 ? "\u2026" : ""}`), { registros: out, avisos };
-}
-async function lerParte(f, p) {
-  if (p.formato === "xlsx") return lerXlsx(p.body, { planilha: f.planilha, linhaCabecalho: f.linha_cabecalho });
-  let payload = p.formato === "zip" ? { isZip: !0, arrayBuffer: p.body.buffer.slice(p.body.byteOffset, p.body.byteOffset + p.body.byteLength), isCsv: !1, rawText: "" } : p.formato === "json" ? { isZip: !1, isCsv: !1, rawText: p.body.toString("utf-8"), data: JSON.parse(p.body.toString("utf-8")) } : { isZip: !1, isCsv: !0, rawText: p.body.toString("utf-8") };
-  return recordsFromPayload(payload, { zipInternalFile: f.arquivo_no_zip, jsonPath: f.caminho_json });
-}
-async function tratar(f, coleta, coletadoEm, municipios) {
-  let brutos = [];
-  for (let p of coleta.partes) {
-    let recs = await lerParte(f, p);
-    if (!recs.length) throw new Error(`nenhum registro lido de "${p.nome}"`);
-    for (let r of recs) brutos.push(r);
-  }
-  if (!brutos.length) throw new Error("nenhum registro lido do arquivo");
-  let { registros, avisos } = aplicarTratamento(brutos, f.tratamento, municipios, new Date(coletadoEm));
+  let assinatura = sha256(Object.keys(hashes).sort().map((k) => `${k}:${hashes[k]}`).join("|") + "|" + cfg + (f.tratamento?.descartar_mes_em_andamento ? "|" + mesAtual : ""));
+  if (estado.hash === assinatura) return { mudou: !1, avisos, hash: assinatura, arquivosBrutos, baixados, reaproveitados };
+  let { registros, avisos: avisosTrat } = global2.finalizar();
   if (!registros.length) throw new Error("nenhum registro restou depois do tratamento (confira o filtro e os nomes das colunas)");
-  let analisado = analyzeDataset(f.nome, registros.map((r) => ({ ...r })), "automacao"), forcar = { ...f.tratamento?.tipos || {} };
+  return { mudou: !0, final: montarFinal(f, registros, urls, assinatura, now.toISOString()), avisos: [...avisosTrat, ...avisos], hash: assinatura, arquivosBrutos, baixados, reaproveitados };
+}
+function montarFinal(f, registros, urls, hash, coletadoEm) {
+  let amostra = registros.length > 5e3 ? registros.filter((_, i) => i % Math.ceil(registros.length / 5e3) === 0) : registros, analisado = analyzeDataset(f.nome, amostra.map((r) => ({ ...r })), "automacao"), forcar = { ...f.tratamento?.tipos || {} };
   f.tratamento?.municipio?.codigo_ibge && (forcar[f.tratamento.municipio.codigo_ibge] = "category");
   for (let c of analisado.columns) forcar[c.key] && (c.type = forcar[c.key]);
   for (let [col, tipo] of Object.entries(forcar))
@@ -15442,20 +15548,20 @@ async function tratar(f, coleta, coletadoEm, municipios) {
   return ct && (ct.ano || ct.data) && (dadosAte = filterKit.computeFilterModel(registros, {
     year: ct.ano ? { enabled: !0, column: ct.ano } : void 0,
     lastUpdate: { show: !0, monthColumn: ct.mes, dateColumn: ct.data }
-  }).lastData?.label), { final: {
+  }).lastData?.label), {
     meta: {
       fonte: f.nome,
       credito: f.fonte_credito,
-      url_origem: coleta.partes.map((p) => p.finalUrl).join(" "),
+      url_origem: urls.join(" "),
       coletado_em: coletadoEm,
       dados_ate: dadosAte,
       linhas: registros.length,
-      hash_bruto: coleta.hash,
+      hash_bruto: hash,
       gerado_por: "DataDash Studio \xB7 automa\xE7\xE3o"
     },
     colunas: analisado.columns.map((c) => ({ chave: c.key, rotulo: c.label, tipo: c.type })),
     registros
-  }, avisos };
+  };
 }
 function gravarFinal(dir, pasta, final) {
   let path = join2(dir, "final", `${pasta}.json`), texto = JSON.stringify(final, null, 1) + `
@@ -15511,7 +15617,7 @@ function resumoMarkdown(linhas, alertas, extra = []) {
 // automation/run.ts
 var rotulo = (f) => f.projeto ? `[${f.projeto}] ${f.nome}` : f.nome;
 async function executar(opts, deps) {
-  let now = opts.agora || /* @__PURE__ */ new Date(), config = loadConfigDir(opts.dados), estadoPath = join4(opts.dados, "estado", "fontes.json"), estado = existsSync4(estadoPath) ? JSON.parse(readFileSync4(estadoPath, "utf-8")) : {}, alertas = [], linhas = [], novosFinais = /* @__PURE__ */ new Map(), municipios = [];
+  let now = opts.agora || /* @__PURE__ */ new Date(), inicio = Date.now(), prazoMs = (opts.prazoMinutos ?? 20) * 6e4, config = loadConfigDir(opts.dados), estadoPath = join4(opts.dados, "estado", "fontes.json"), estado = existsSync4(estadoPath) ? JSON.parse(readFileSync4(estadoPath, "utf-8")) : {}, alertas = [], linhas = [], novosFinais = /* @__PURE__ */ new Map(), municipios = [];
   if (config.fontes.some((f) => f.ativo !== !1 && f.tratamento?.municipio))
     try {
       municipios = await carregarMunicipios(opts.dados, deps.fetcher);
@@ -15527,16 +15633,22 @@ async function executar(opts, deps) {
       continue;
     }
     try {
-      let c = await coletar(f, st, opts.dados, now, deps.fetcher);
-      if (st.ultimaVerificacao = now.toISOString(), delete st.ultimoErro, delete st.ultimoErroEm, c.mudou) {
-        let coletadoEm = now.toISOString(), { final, avisos } = await tratar(f, c, coletadoEm, municipios);
-        f.dados_pessoais && !deps.firebase ? (st.avisos = ["Fonte marcada com dados_pessoais: no modo simplificado (sem Firebase) ela n\xE3o \xE9 gravada em lugar nenhum. Ela s\xF3 funciona no modo completo, que envia os dados direto ao app."], linhas.push({ fonte: rotulo(f), resultado: "\u{1F512} ignorada no modo simplificado", detalhe: "dados pessoais" })) : f.dados_pessoais ? (novosFinais.set(f.id, final), linhas.push({ fonte: rotulo(f), resultado: "\u{1F512} dado novo (n\xE3o arquivado: dados pessoais)", detalhe: `${final.meta.linhas} linhas` })) : (gravarFinal(opts.dados, pastaFonte(f), final), novosFinais.set(f.id, final), linhas.push({ fonte: rotulo(f), resultado: "\u{1F195} dado novo", detalhe: `${final.meta.linhas} linhas${final.meta.dados_ate ? ` \xB7 dados at\xE9 ${final.meta.dados_ate}` : ""}` })), Object.assign(st, { hash: c.hash, hashes: c.hashes, ultimaNovidade: coletadoEm, arquivo: f.dados_pessoais ? void 0 : c.arquivosBrutos[c.arquivosBrutos.length - 1] }), delete st.aguardandoNovidadeDesde, st.avisos = [...avisos.filter((a) => !a.startsWith("Agrupado")), ...c.aviso ? [c.aviso] : []];
+      let c = await processarFonte(f, st, opts.dados, now, deps.fetcher, municipios, { prazoMs, inicio });
+      if (c.incompleto) {
+        linhas.push({ fonte: rotulo(f), resultado: "\u23F3 em andamento", detalhe: `${c.incompleto.feitos} de ${c.incompleto.total} arquivos processados; continua na pr\xF3xima execu\xE7\xE3o` }), estado[f.id] = st;
+        continue;
+      }
+      st.ultimaVerificacao = now.toISOString(), delete st.ultimoErro, delete st.ultimoErroEm;
+      let extraArquivos = c.reaproveitados > 0 ? ` \xB7 ${c.baixados} ${c.baixados === 1 ? "arquivo baixado" : "arquivos baixados"}; ${c.reaproveitados} ${c.reaproveitados === 1 ? "ano fechado reaproveitado" : "anos fechados reaproveitados"} sem baixar` : "";
+      if (c.mudou && c.final) {
+        let coletadoEm = now.toISOString(), final = c.final, avisos = c.avisos;
+        f.dados_pessoais && !deps.firebase ? (st.avisos = ["Fonte marcada com dados_pessoais: no modo simplificado (sem Firebase) ela n\xE3o \xE9 gravada em lugar nenhum. Ela s\xF3 funciona no modo completo, que envia os dados direto ao app."], linhas.push({ fonte: rotulo(f), resultado: "\u{1F512} ignorada no modo simplificado", detalhe: "dados pessoais" })) : f.dados_pessoais ? (novosFinais.set(f.id, final), linhas.push({ fonte: rotulo(f), resultado: "\u{1F512} dado novo (n\xE3o arquivado: dados pessoais)", detalhe: `${final.meta.linhas} linhas` })) : (gravarFinal(opts.dados, pastaFonte(f), final), novosFinais.set(f.id, final), linhas.push({ fonte: rotulo(f), resultado: "\u{1F195} dado novo", detalhe: `${final.meta.linhas} linhas${final.meta.dados_ate ? ` \xB7 dados at\xE9 ${final.meta.dados_ate}` : ""}${extraArquivos}` })), Object.assign(st, { hash: c.hash, ultimaNovidade: coletadoEm, arquivo: f.dados_pessoais ? void 0 : c.arquivosBrutos[c.arquivosBrutos.length - 1] }), delete st.hashes, delete st.aguardandoNovidadeDesde, st.avisos = avisos.filter((a) => !a.startsWith("Agrupado"));
         for (let info of avisos.filter((a) => a.startsWith("Agrupado"))) {
           let l = linhas[linhas.length - 1];
           l && (l.detalhe = `${l.detalhe || ""} \xB7 ${info.replace(/^Agrupado-info: /, "").replace(/^Agrupado: /, "agrupado: ")}`);
         }
       } else
-        motivo === "agendada" && (f.agenda.tentar_ate_novidade_dias || 0) > 0 && !st.aguardandoNovidadeDesde && (st.aguardandoNovidadeDesde = ultimoHorarioAgendado(f, now).toISOString()), linhas.push({ fonte: rotulo(f), resultado: "\u2796 sem novidade", detalhe: motivo === "nova_tentativa" ? "nova tentativa (aguardando publica\xE7\xE3o da fonte)" : "" });
+        motivo === "agendada" && (f.agenda.tentar_ate_novidade_dias || 0) > 0 && !st.aguardandoNovidadeDesde && (st.aguardandoNovidadeDesde = ultimoHorarioAgendado(f, now).toISOString()), linhas.push({ fonte: rotulo(f), resultado: "\u2796 sem novidade", detalhe: ((motivo === "nova_tentativa" ? "nova tentativa (aguardando publica\xE7\xE3o da fonte)" : "") + extraArquivos).replace(/^ · /, "") });
       let parada = fonteParada(f, st, now);
       parada && alertas.push({ projeto: f.projeto, chave: `parada:${f.id}`, gravidade: "atencao", titulo: `Fonte sem dado novo: ${f.nome}`, corpo: parada });
     } catch (e) {
