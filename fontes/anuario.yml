@@ -17,7 +17,7 @@ fontes:
   # Fica desativado até conferirmos os nomes das colunas (ver "tratamento" abaixo).
   - id: receitas-es
     nome: Receitas do Estado do Espírito Santo
-    ativo: false
+    ativo: true
     ckan:
       portal: https://dados.es.gov.br
       conjunto: portal-da-transparencia-receitas
