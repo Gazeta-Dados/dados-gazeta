@@ -29,7 +29,7 @@ fontes:
       frequencia: diaria               # o portal costuma atualizar o ano corrente com frequência
       hora: "06:00"
     max_dias_sem_novidade: 45
-    dataset_id: COLE-AQUI-O-ID-DA-BASE # no app: Bases → "Versões e edições" (o ID aparece no topo)
+    # dataset_id: COLE-AQUI-O-ID-DA-BASE # só no modo completo. No app: Bases → "Versões e edições" (o ID aparece no topo)
     fonte_credito: "Portal da Transparência do Governo do Estado do Espírito Santo"
     colunas_tempo: { ano: ano, mes: mes }   # para o selo "Dados até…"
     tratamento:

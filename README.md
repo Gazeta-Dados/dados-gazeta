@@ -20,6 +20,20 @@ A automação roda **de hora em hora**, mas cada fonte é verificada **na própr
 - fontes paradas por tempo demais;
 - mudanças em dados de edições congeladas.
 
+## Dois modos (escolhidos sozinhos)
+
+| | Modo simplificado (padrão) | Modo completo |
+|---|---|---|
+| Precisa de | Só este repositório | Também o repositório do app, um token e a chave do Firebase |
+| Coleta, histórico, tratamento, JSON final | Sim | Sim |
+| Avisos por e-mail (falha de coleta, fonte parada, tratamento) | Sim | Sim |
+| Atualiza as bases do app | O app lê o JSON de `final/` quando é aberto | Sim, sozinho, com a checagem do app |
+| Publica as páginas (GitHub Pages / servidor) | Não: as páginas são exportadas pelo app | Sim, sozinho |
+
+O fluxo usa o modo completo automaticamente quando os segredos `FIREBASE_SERVICE_ACCOUNT` e `APP_REPO_TOKEN` e a variável `APP_REPO` existem. Sem eles, roda o modo simplificado com o arquivo único `automacao/automacao.mjs`, que não precisa instalar nada. Para passar ao modo completo, basta cadastrar os segredos (ver "Configuração do modo completo").
+
+**Atualizações da automação:** quando receber uma versão nova do `automacao.mjs`, envie-a para a pasta `automacao/` (Add file → Upload files), substituindo a anterior.
+
 ## Estrutura
 
 | Pasta/arquivo | O que é |
@@ -31,8 +45,16 @@ A automação roda **de hora em hora**, mas cada fonte é verificada **na própr
 | `estado/` | Controle da automação (última verificação, publicação). Não editar. |
 | `referencias/municipios-es.json` | Lista oficial do IBGE, baixada na primeira execução. |
 | `.github/workflows/atualizar.yml` | O fluxo automático. |
+| `automacao/automacao.mjs` | A automação em um arquivo único (modo simplificado). |
 
-## Configuração (uma vez só, pela TI ou por quem administra o GitHub)
+## Configuração do modo simplificado (comece por aqui)
+
+1. Crie o repositório público na organização da Gazeta e envie o conteúdo desta pasta (Add file → Upload files). O GitHub não aceita a pasta `.github` pelo arrastar: crie `.github/workflows/atualizar.yml` pelo site (Add file → Create new file) e cole o conteúdo.
+2. Quem deve receber os avisos: Watch → Custom → **Issues**.
+3. Ative as fontes em `fontes/<projeto>.yml` e rode: Actions → Atualizar dados e publicar → Run workflow → "forcar".
+4. No app, crie cada base importando por URL o JSON de `final/<projeto>/<fonte>.json` (endereço `https://raw.githubusercontent.com/ORGANIZACAO/REPOSITORIO/main/final/...`, caminho dos registros `registros`) e deixe a sincronização automática da base ligada (ex.: diária).
+
+## Configuração do modo completo (quando houver acesso de administrador ao Firebase)
 
 ### 1. Repositórios na organização da Rede Gazeta
 Crie os repositórios na **organização**, não numa conta pessoal, para o projeto não depender de uma pessoa:
