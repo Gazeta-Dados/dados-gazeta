@@ -11555,6 +11555,42 @@ var require_lib3 = __commonJS({
   }
 });
 
+// src/lib/datadashPackage.ts
+function ehPacoteDatadash(d) {
+  return !!d && typeof d == "object" && !Array.isArray(d) && Array.isArray(d.registros) && Array.isArray(d.colunas) && d.meta && typeof d.meta == "object" && d.colunas.every((c) => c && typeof c.chave == "string");
+}
+function metaDoPacote(p) {
+  let m = p.meta || {}, txt = (v) => typeof v == "string" && v.trim() ? v.trim().slice(0, 500) : void 0;
+  return JSON.parse(JSON.stringify({
+    fonte: txt(m.fonte),
+    credito: txt(m.credito),
+    dadosAte: txt(m.dados_ate),
+    coletadoEm: txt(m.coletado_em),
+    urlOrigem: txt(m.url_origem),
+    geradoPor: txt(m.gerado_por)
+  }));
+}
+function aplicarColunasDoPacote(columns, p, opts = {}) {
+  let porChave = new Map(p.colunas.map((c) => [c.chave, c]));
+  return columns.map((col) => {
+    let c = porChave.get(col.key);
+    if (!c || opts.somenteNovas && !opts.somenteNovas.has(col.key)) return col;
+    let tipo = TIPOS.includes(c.tipo) ? c.tipo : col.type;
+    return { ...col, type: tipo, ...opts.rotulos && c.rotulo ? { label: c.rotulo } : {} };
+  });
+}
+function textoNasColunasDeTexto(records, columns) {
+  let texto = columns.filter((c) => c.type === "category" || c.type === "string").map((c) => c.key);
+  if (!texto.length) return records;
+  for (let r of records) for (let k of texto) typeof r[k] == "number" && (r[k] = String(r[k]));
+  return records;
+}
+var TIPOS, init_datadashPackage = __esm({
+  "src/lib/datadashPackage.ts"() {
+    TIPOS = ["number", "string", "date", "boolean", "category"];
+  }
+});
+
 // src/lib/dataParser.ts
 function parseCSV(csvText) {
   return new Promise((resolve, reject) => {
@@ -11587,6 +11623,8 @@ function extractJsonRecords(data, manualPath) {
       candidatePaths: [{ path: "raiz (array)", count: valid.length }]
     };
   }
+  if ((!manualPath || !manualPath.trim()) && ehPacoteDatadash(data))
+    return { records: data.registros, detectedPath: "registros", candidatePaths: [{ path: "registros", count: data.registros.length }] };
   if (manualPath && manualPath.trim()) {
     let parts = manualPath.trim().replace(/^\[|\]$/g, "").split(".").map((p) => p.trim()).filter(Boolean), current = data;
     for (let part of parts)
@@ -11850,6 +11888,7 @@ function reconcileSyncedRecords(ds, incomingRecords) {
 }
 var import_papaparse, init_dataParser = __esm({
   "src/lib/dataParser.ts"() {
+    init_datadashPackage();
     import_papaparse = __toESM(require_papaparse(), 1);
   }
 });
@@ -11871,14 +11910,26 @@ async function recordsFromPayload(p, ds) {
   }
   return p.isCsv ? await parseCSV(p.rawText) : p.data ? extractJsonRecords(p.data, ds.jsonPath).records : p.rawText ? parseJSON(p.rawText, ds.jsonPath) : [];
 }
-function buildNextVersion(ds, incoming) {
+function pacoteDoPayload(p) {
+  let d = p.data;
+  if (d === void 0 && !p.isCsv && !p.isZip && p.rawText && p.rawText.trimStart().startsWith("{"))
+    try {
+      d = JSON.parse(p.rawText);
+    } catch {
+      d = void 0;
+    }
+  return ehPacoteDatadash(d) ? d : null;
+}
+function buildNextVersion(ds, incoming, pacote) {
   let finalRecords = incoming;
   if (ds.syncMode === "append") {
     let existing = new Set((ds.records || []).map((r) => JSON.stringify(r)));
     finalRecords = [...ds.records || [], ...incoming.filter((r) => !existing.has(JSON.stringify(r)))];
   }
   let reconciled = reconcileSyncedRecords(ds, finalRecords);
-  return { records: reconciled.records, columns: reconciled.columns, columnCount: reconciled.columnCount };
+  if (!pacote) return { records: reconciled.records, columns: reconciled.columns, columnCount: reconciled.columnCount };
+  let existentes = new Set((ds.columns || []).map((c) => c.key)), novas = new Set(reconciled.columns.map((c) => c.key).filter((k) => !existentes.has(k))), columns = aplicarColunasDoPacote(reconciled.columns, pacote, { rotulos: !0, somenteNovas: novas });
+  return { records: textoNasColunasDeTexto(reconciled.records, columns), columns, columnCount: reconciled.columnCount, sourceMeta: metaDoPacote(pacote) };
 }
 function dataSignature(records) {
   return `${records.length}_${JSON.stringify(records.slice(0, 2))}_${JSON.stringify(records.slice(-2))}`;
@@ -11891,6 +11942,7 @@ var import_jszip2, init_syncCore = __esm({
   "src/lib/syncCore.ts"() {
     import_jszip2 = __toESM(require_lib3(), 1);
     init_dataParser();
+    init_datadashPackage();
   }
 });
 
@@ -12315,9 +12367,9 @@ async function syncOneDataset(ds, store, fetcher, now) {
   try {
     let url = resolveDynamicUrl((ds.sourceUrl || ds.dynamicUrlPattern || "").trim(), now), resp = await fetcher(url);
     if (resp.status >= 400) throw new Error(`a fonte respondeu HTTP ${resp.status}`);
-    let incoming = await recordsFromPayload(toPayload(resp.body, resp.finalUrl), ds);
+    let payload = toPayload(resp.body, resp.finalUrl), incoming = await recordsFromPayload(payload, ds);
     if (!incoming.length) throw new Error("a fonte n\xE3o retornou registros");
-    let published = await store.loadRecords(ds), current = { ...ds, records: published }, next = buildNextVersion(current, incoming);
+    let published = await store.loadRecords(ds), current = { ...ds, records: published }, next = buildNextVersion(current, incoming, pacoteDoPayload(payload));
     if (isAlreadyKnown(current, next.records))
       return await store.updateDataset(ds.id, { lastSyncedAt: nowIso, lastSyncStatus: "success", lastSyncMessage: "Sem novidades na fonte", updatedAt: nowIso }), { ...base, result: "unchanged", message: "Sem novidades na fonte.", rowCount: next.records.length };
     let checks = validateDatasetUpdate({ records: published, columns: ds.columns }, next, { yearColumn: ds.primaryYearColumn }), version = newVersionId(), { chunks, storedCount } = splitIntoChunks(next.records);
@@ -12334,6 +12386,7 @@ async function syncOneDataset(ds, store, fetcher, now) {
         fetchedAt: nowIso,
         source: "scheduled",
         signature: dataSignature(next.records),
+        sourceMeta: next.sourceMeta,
         ...truncated
       }), updateLog2 = appendLog(ds.updateLog, { at: nowIso, action: "held", source: "scheduled", rowCount: next.records.length, previousRowCount: ds.rowCount, summary: summarizeChecks(checks) });
       return await store.updateDataset(ds.id, { pendingUpdate: pending, updateLog: updateLog2, lastSyncedAt: nowIso, lastSyncStatus: "success", lastSyncMessage: "Atualiza\xE7\xE3o aguardando revis\xE3o", updatedAt: nowIso }), await store.deleteChunksNotIn(ds.id, versionsInUse({ ...ds, pendingUpdate: pending })), { ...base, result: "held", message: summarizeChecks(checks), rowCount: next.records.length };
@@ -12357,6 +12410,7 @@ async function syncOneDataset(ds, store, fetcher, now) {
       ...truncated,
       updateLog,
       ...impact ? { editionImpact: impact } : {},
+      ...next.sourceMeta ? { sourceMeta: next.sourceMeta } : {},
       lastSyncedAt: nowIso,
       lastSyncStatus: "success",
       lastSyncMessage: `Atualizado (${next.records.length} linhas)`,
@@ -13417,7 +13471,7 @@ function generateStandaloneHtml(dashboard, dataset, records, options = {}) {
         <span id="filteredBadge" aria-live="polite" class="hidden text-xs ${isDark ? "text-slate-400" : "text-slate-600"}"></span>
       </div>
       <div class="text-[11px] text-slate-500 font-mono">
-        Fonte: <span id="datasetNameText">${escapeHtml(dataset.name)}</span>
+        Fonte: <span id="datasetNameText">${escapeHtml(dataset.sourceMeta?.credito || dataset.name)}</span>
       </div>
       ${dataset.isPartial ? `<div role="note" class="mt-3 px-4 py-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-600 text-xs font-sans font-semibold">\u26A0\uFE0F ${escapeHtml(dataset.partialNote || "Base incompleta: totais podem n\xE3o representar a base inteira.")}</div>` : ""}
     </div>
@@ -14020,8 +14074,8 @@ ${ddFilterRuntime({ config: dashboard.dashboardFilters, lastSync: dataset.lastSy
                 badgeText.innerText = 'Atualizado \xE0s ' + nowStr;
               }
               const datasetNameElem = document.getElementById('datasetNameText');
-              if (datasetNameElem && data.name) {
-                datasetNameElem.innerText = data.name;
+              if (datasetNameElem && (data.sourceMeta?.credito || data.name)) {
+                datasetNameElem.innerText = data.sourceMeta?.credito || data.name;
               }
 
               filterStandaloneData();
@@ -14393,7 +14447,7 @@ function generateStandaloneInfographicHtml(dashboard, dataset, records, options 
       <div class="flex flex-wrap items-center justify-center gap-2.5 text-xs pt-3 font-sans ${themeMeta.meta}">
         <span>Por ${escapeHtml(dashboard.authorByline || "Reda\xE7\xE3o de Dados")}</span>
         <span aria-hidden="true">\xB7</span>
-        <span>Fonte: <strong>${escapeHtml(dataset.name)}</strong></span>
+        <span>Fonte: <strong>${escapeHtml(dataset.sourceMeta?.credito || dataset.name)}</strong></span>
         <span aria-hidden="true">\xB7</span>
         <span>Publicado em ${nowFormatted}</span>
       </div>
@@ -14492,7 +14546,7 @@ function generateStandaloneInfographicHtml(dashboard, dataset, records, options 
         Este infogr\xE1fico foi gerado a partir da base <strong>${escapeHtml(dataset.name)}</strong>. As m\xE9tricas s\xE3o calculadas automaticamente; confira os valores na fonte original.
       </p>
       <div class="flex flex-wrap items-center justify-center gap-4 text-xs font-mono text-slate-400 pt-2">
-        <span>Fonte: ${escapeHtml(dataset.name)}</span>
+        <span>Fonte: ${escapeHtml(dataset.sourceMeta?.credito || dataset.name)}</span>
         <span>\xB7</span>
         <span>Publicado em ${nowFormatted}</span>
       </div>
@@ -15373,18 +15427,52 @@ init_syncCore();
 init_syncSchedule();
 init_dataParser();
 init_dashboardFilters();
-var MAX_BYTES = 1024 * 1024 * 1024, MAX_BRUTO_NO_REPO = 90 * 1024 * 1024, fetchPadrao = async (url) => {
-  let ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 12e4);
-  try {
-    let res = await fetch(url, { redirect: "follow", signal: ctrl.signal, headers: { "User-Agent": "DataDash-Automacao/1.0 (+jornalismo de dados)" } }), len = Number(res.headers.get("content-length") || 0);
-    if (len > MAX_BYTES) throw new Error(`arquivo grande demais (${Math.round(len / 1048576)} MB)`);
-    let body = Buffer.from(await res.arrayBuffer());
-    if (body.length > MAX_BYTES) throw new Error(`arquivo grande demais (${Math.round(body.length / 1048576)} MB)`);
-    return { status: res.status, body, finalUrl: res.url || url };
-  } finally {
-    clearTimeout(timer);
-  }
-};
+var MAX_BYTES = 1024 * 1024 * 1024, MAX_BRUTO_NO_REPO = 90 * 1024 * 1024;
+function criarFetcher(opts = {}) {
+  let inatividadeMs = opts.inatividadeMs ?? 12e4, totalMs = opts.totalMs ?? 15 * 6e4, tentativas = opts.tentativas ?? 2, umaVez = async (url) => {
+    let ctrl = new AbortController(), motivo = "", parado, rearmar = () => {
+      parado && clearTimeout(parado), parado = setTimeout(() => {
+        motivo = `o servidor ficou ${Math.round(inatividadeMs / 1e3)} segundos sem enviar dados`, ctrl.abort();
+      }, inatividadeMs);
+    }, teto = setTimeout(() => {
+      motivo = `passou de ${Math.round(totalMs / 6e4)} minutos (o portal est\xE1 lento); a automa\xE7\xE3o tenta de novo na pr\xF3xima execu\xE7\xE3o`, ctrl.abort();
+    }, totalMs);
+    rearmar();
+    try {
+      let res = await fetch(url, { redirect: "follow", signal: ctrl.signal, headers: { "User-Agent": "DataDash-Automacao/1.0 (+jornalismo de dados)" } }), len = Number(res.headers.get("content-length") || 0);
+      if (len > MAX_BYTES) throw new Error(`arquivo grande demais (${Math.round(len / 1048576)} MB; limite de ${Math.round(MAX_BYTES / 1048576)} MB)`);
+      let partes = [], total = 0;
+      if (res.body) {
+        let leitor = res.body.getReader();
+        for (; ; ) {
+          let { done, value } = await leitor.read();
+          if (done) break;
+          if (rearmar(), total += value.length, total > MAX_BYTES)
+            throw ctrl.abort(), new Error(`arquivo grande demais (mais de ${Math.round(MAX_BYTES / 1048576)} MB)`);
+          partes.push(Buffer.from(value));
+        }
+      }
+      return { status: res.status, body: Buffer.concat(partes, total), finalUrl: res.url || url };
+    } catch (e) {
+      throw motivo ? new Error(`download interrompido: ${motivo}`) : e?.name === "AbortError" ? new Error("download interrompido") : e;
+    } finally {
+      clearTimeout(teto), parado && clearTimeout(parado);
+    }
+  };
+  return async (url) => {
+    let ultimo;
+    for (let i = 1; i <= tentativas; i++)
+      try {
+        return await umaVez(url);
+      } catch (e) {
+        if (ultimo = e, !/fetch failed|terminated|UND_ERR|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket|sem enviar dados/i.test(String(e?.message) + String(e?.cause?.code || "")) || i === tentativas) break;
+        await new Promise((r) => setTimeout(r, process.env.DD_TESTE_RAPIDO ? 100 : 5e3));
+      }
+    let causa = ultimo?.cause?.code ? ` (${ultimo.cause.code})` : "", msg = String(ultimo?.message || ultimo);
+    throw new Error(msg === "fetch failed" ? `n\xE3o foi poss\xEDvel conectar ao endere\xE7o${causa}` : msg);
+  };
+}
+var fetchPadrao = criarFetcher();
 function sha256(buf) {
   return createHash("sha256").update(buf).digest("hex");
 }
@@ -15478,7 +15566,7 @@ async function lerLinhas(f, body, formato, aoLer) {
 }
 var slug = (s) => normalizarNome(s).replace(/ /g, "-").slice(0, 60) || "arquivo";
 async function processarFonte(f, estado, dir, now, fetcher, municipios, opts = {}) {
-  let inicio = opts.inicio ?? Date.now(), prazo = opts.prazoMs ?? 20 * 6e4, brt2 = new Date(now.getTime() - 3 * 36e5), mesAtual = brt2.toISOString().slice(0, 7), cfg = sha256(JSON.stringify({ t: f.tratamento || null, planilha: f.planilha, cab: f.linha_cabecalho, zip: f.arquivo_no_zip, json: f.caminho_json, formato: f.formato })), podeReaproveitar = !!f.tratamento?.agrupar?.por?.length && !f.dados_pessoais, pastaCache = join2(dir, "estado", "cache", pastaFonte(f)), alvos;
+  let inicio = opts.inicio ?? Date.now(), prazo = opts.prazoMs ?? 12 * 6e4, brt2 = new Date(now.getTime() - 3 * 36e5), mesAtual = brt2.toISOString().slice(0, 7), cfg = sha256(JSON.stringify({ t: f.tratamento || null, planilha: f.planilha, cab: f.linha_cabecalho, zip: f.arquivo_no_zip, json: f.caminho_json, formato: f.formato })), podeReaproveitar = !!f.tratamento?.agrupar?.por?.length && !f.dados_pessoais, pastaCache = join2(dir, "estado", "cache", pastaFonte(f)), alvos;
   f.arquivo ? alvos = [{ chave: slug(basename2(f.arquivo)), nome: basename2(f.arquivo), local: f.arquivo }] : f.ckan ? alvos = (await recursosCkan(f, now, fetcher)).map((r) => ({ chave: slug(r.nome), nome: r.nome, url: r.url, atualizadoEm: r.atualizadoEm || void 0 })) : alvos = [{ chave: slug(f.id), nome: f.id, url: resolverUrl(f.url || "", now) }], estado.partes = estado.partes || {};
   let global2 = new Tratador(f.tratamento, municipios, now), hashes = {}, arquivosBrutos = [], avisos = [], urls = [], baixados = 0, reaproveitados = 0, feitos = 0, lerCache = (chave) => {
     let arq = join2(pastaCache, `${chave}.json`);
@@ -15617,7 +15705,7 @@ function resumoMarkdown(linhas, alertas, extra = []) {
 // automation/run.ts
 var rotulo = (f) => f.projeto ? `[${f.projeto}] ${f.nome}` : f.nome;
 async function executar(opts, deps) {
-  let now = opts.agora || /* @__PURE__ */ new Date(), inicio = Date.now(), prazoMs = (opts.prazoMinutos ?? 20) * 6e4, config = loadConfigDir(opts.dados), estadoPath = join4(opts.dados, "estado", "fontes.json"), estado = existsSync4(estadoPath) ? JSON.parse(readFileSync4(estadoPath, "utf-8")) : {}, alertas = [], linhas = [], novosFinais = /* @__PURE__ */ new Map(), municipios = [];
+  let now = opts.agora || /* @__PURE__ */ new Date(), inicio = Date.now(), prazoMs = (opts.prazoMinutos ?? 12) * 6e4, config = loadConfigDir(opts.dados), estadoPath = join4(opts.dados, "estado", "fontes.json"), estado = existsSync4(estadoPath) ? JSON.parse(readFileSync4(estadoPath, "utf-8")) : {}, alertas = [], linhas = [], novosFinais = /* @__PURE__ */ new Map(), municipios = [];
   if (config.fontes.some((f) => f.ativo !== !1 && f.tratamento?.municipio))
     try {
       municipios = await carregarMunicipios(opts.dados, deps.fetcher);
