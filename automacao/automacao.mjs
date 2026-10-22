@@ -13043,15 +13043,15 @@ var PAGE_LIBS, init_cdnLibs = __esm({
 var firebase_applet_config_default, init_firebase_applet_config = __esm({
   "firebase-applet-config.json"() {
     firebase_applet_config_default = {
-      projectId: "singular-base-37854",
-      appId: "1:130045362870:web:895e4d99f452fa715e9c17",
-      apiKey: "AIzaSyDMWurrOcXqQq5qcKjN3JPe4RnTZLlptVs",
-      authDomain: "singular-base-37854.firebaseapp.com",
+      projectId: "datadash-mika",
+      appId: "1:165065424855:web:0a2fb6bdab15d6c1c81592",
+      apiKey: "AIzaSyBfP8f7VLzEkZetFJ-YFH6kehPPTDOUpxs",
+      authDomain: "datadash-mika.firebaseapp.com",
       firestoreDatabaseId: "ai-studio-3a095309-81b5-45d1-88e0-8af1d80e6fd9",
-      storageBucket: "singular-base-37854.firebasestorage.app",
-      messagingSenderId: "130045362870",
+      storageBucket: "datadash-mika.firebasestorage.app",
+      messagingSenderId: "165065424855",
       measurementId: "",
-      oAuthClientId: "130045362870-8ko6rdtfvdvdblk99n41hi7uf3pgvovs.apps.googleusercontent.com",
+      oAuthClientId: "165065424855-9tf72gfdo6518tcdult0pb8a9bdqu35l.apps.googleusercontent.com",
       recaptchaSiteKey: ""
     };
   }
@@ -15122,7 +15122,7 @@ function validateConfig(raw) {
   return { fontes: fontes.map((f) => ({ ativo: !0, formato: "auto", ...f })), publicacao: raw.publicacao || {} };
 }
 var PROJETO_RE = /^[a-z0-9][a-z0-9-]{0,40}$/;
-function loadConfigDir(dir) {
+function loadConfigDir(dir, doApp = []) {
   let partes = [], raiz = join(dir, "fontes.yml");
   existsSync(raiz) && partes.push({ arquivo: "fontes.yml", raw: (0, import_yaml.parse)(readFileSync(raiz, "utf-8")) || {} });
   let pasta = join(dir, "fontes");
@@ -15133,8 +15133,8 @@ function loadConfigDir(dir) {
 - fontes/${nome}: o nome do arquivo vira o nome do projeto; use s\xF3 letras min\xFAsculas, n\xFAmeros e h\xEDfens (ex.: anuario.yml).`);
       partes.push({ arquivo: `fontes/${nome}`, raw: (0, import_yaml.parse)(readFileSync(join(pasta, nome), "utf-8")) || {}, projeto });
     }
-  if (!partes.length) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
-- n\xE3o encontrei fontes.yml nem a pasta fontes/.`);
+  if (!partes.length && !doApp.length) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
+- n\xE3o encontrei fontes.yml nem a pasta fontes/ (e nenhuma fonte cadastrada no app).`);
   let fontes = [], erros = [], publicacao = {};
   for (let p of partes) {
     try {
@@ -15150,10 +15150,11 @@ function loadConfigDir(dir) {
     }
     p.raw.publicacao && (publicacao = { ...publicacao, ...p.raw.publicacao });
   }
+  for (let f of doApp) fontes.push(f);
   let vistos = /* @__PURE__ */ new Map();
   for (let f of fontes) {
-    let ja = vistos.get(f.id);
-    ja && erros.push(`o id "${f.id}" aparece em mais de uma fonte (${ja} e ${f.projeto || "fontes.yml"}); ids precisam ser \xFAnicos.`), vistos.set(f.id, f.projeto || "fontes.yml");
+    let ja = vistos.get(f.id), onde = f.origem === "app" ? "tela Fontes autom\xE1ticas do app" : f.projeto || "fontes.yml";
+    ja && erros.push(`o id "${f.id}" aparece em mais de uma fonte (${ja} e ${onde}); ids precisam ser \xFAnicos.`), vistos.set(f.id, onde);
   }
   if (erros.length) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
 - ` + erros.join(`
@@ -15161,6 +15162,26 @@ function loadConfigDir(dir) {
   if (!fontes.length) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
 - nenhuma fonte configurada.`);
   return { fontes, publicacao };
+}
+function validarFontesDoApp(docs) {
+  let fontes = [], erros = [];
+  for (let d of docs) {
+    let cfg = { ...d.config || {}, id: d.id, ativo: d.ativo !== !1 };
+    if (cfg.arquivo) {
+      erros.push({ id: d.id, nome: cfg.nome || d.id, mensagem: "planilhas da pasta entrada/ s\xE3o configuradas nos arquivos do GitHub, n\xE3o no app" });
+      continue;
+    }
+    try {
+      let f = validateConfig({ fontes: [cfg] }).fontes[0];
+      if (f.projeto && !PROJETO_RE.test(f.projeto)) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
+- "projeto" s\xF3 com letras min\xFAsculas, n\xFAmeros e h\xEDfens.`);
+      fontes.push({ ...f, origem: "app" });
+    } catch (e) {
+      erros.push({ id: d.id, nome: cfg.nome || d.id, mensagem: String(e.message).replace(`Configura\xE7\xE3o inv\xE1lida:
+- `, "").replace(/\n- /g, "; ").replace(/fontes\[0\] \([^)]*\): /g, "") });
+    }
+  }
+  return { fontes, erros };
 }
 function pastaFonte(f) {
   return f.projeto ? `${f.projeto}/${f.id}` : f.id;
@@ -15719,7 +15740,14 @@ async function executar(opts, deps) {
   let now = opts.agora || /* @__PURE__ */ new Date(), inicio = Date.now(), prazoMs = (opts.prazoMinutos ?? 45) * 6e4, gravarEstado = () => {
     mkdirSync3(dirname3(estadoPath), { recursive: !0 }), writeFileSync3(estadoPath + ".tmp", JSON.stringify(estado, null, 2) + `
 `), renameSync(estadoPath + ".tmp", estadoPath);
-  }, config = loadConfigDir(opts.dados), estadoPath = join4(opts.dados, "estado", "fontes.json"), estado = existsSync4(estadoPath) ? JSON.parse(readFileSync4(estadoPath, "utf-8")) : {}, alertas = [], linhas = [], novosFinais = /* @__PURE__ */ new Map(), municipios = [];
+  }, docsApp = deps.firebase?.listarFontes ? await deps.firebase.listarFontes().catch((e) => (console.warn("N\xE3o foi poss\xEDvel ler as fontes do app:", e?.message || e), [])) : [], doApp = validarFontesDoApp(docsApp), config = loadConfigDir(opts.dados, doApp.fontes), estadoPath = join4(opts.dados, "estado", "fontes.json"), estado = existsSync4(estadoPath) ? JSON.parse(readFileSync4(estadoPath, "utf-8")) : {}, alertas = [];
+  for (let e of doApp.erros)
+    alertas.push({ chave: `config-app:${e.id}`, gravidade: "erro", titulo: `Fonte do app com configura\xE7\xE3o inv\xE1lida: ${e.nome}`, corpo: `A fonte "${e.nome}", cadastrada na tela Fontes autom\xE1ticas do app, n\xE3o p\xF4de ser usada.
+
+**Motivo:** ${e.mensagem}
+
+Corrija no app; as outras fontes continuam funcionando.` });
+  let linhas = [], novosFinais = /* @__PURE__ */ new Map(), municipios = [];
   if (config.fontes.some((f) => f.ativo !== !1 && f.tratamento?.municipio))
     try {
       municipios = await carregarMunicipios(opts.dados, deps.fetcher);
@@ -15835,6 +15863,31 @@ Os pain\xE9is continuam com a vers\xE3o anterior. No app: Bases \u2192 "${atual.
     } catch (e) {
       alertas.push({ chave: "publicacao", gravidade: "erro", titulo: "Falha ao gerar os sites publicados", corpo: String(e?.message || e) });
     }
+  if (deps.firebase?.gravarSituacao) {
+    let situacoes = [];
+    for (let f of config.fontes.filter((x) => x.origem === "app")) {
+      let st = estado[f.id] || {}, linha = linhas.find((l) => l.fonte === rotulo(f)), dadosAte, registros;
+      try {
+        let fin = JSON.parse(readFileSync4(join4(opts.dados, "final", `${pastaFonte(f)}.json`), "utf-8"));
+        dadosAte = fin.meta?.dados_ate, registros = fin.meta?.linhas;
+      } catch {
+      }
+      situacoes.push([f.id, JSON.parse(JSON.stringify({
+        atualizadaEm: now.toISOString(),
+        ultimaVerificacao: st.ultimaVerificacao,
+        ultimaNovidade: st.ultimaNovidade,
+        ultimoErro: st.ultimoErro || null,
+        ultimoErroEm: st.ultimoErroEm || null,
+        resultado: linha?.resultado,
+        detalhe: linha?.detalhe,
+        dadosAte,
+        registros,
+        arquivoFinal: `final/${pastaFonte(f)}.json`
+      }))]);
+    }
+    for (let e of doApp.erros) situacoes.push([e.id, { atualizadaEm: now.toISOString(), ultimoErro: `configura\xE7\xE3o inv\xE1lida: ${e.mensagem}`, ultimoErroEm: now.toISOString(), resultado: "\u{1F534} configura\xE7\xE3o inv\xE1lida" }]);
+    for (let [id, sit] of situacoes) await deps.firebase.gravarSituacao(id, sit).catch((e) => console.warn(`Situa\xE7\xE3o da fonte ${id} n\xE3o gravada:`, e?.message || e));
+  }
   gravarEstado();
   let extra = publicacao ? [`**Publica\xE7\xE3o:** ${publicacao.projetos.map((p) => `${p.nome} (${p.paginas} p\xE1ginas${p.mudou ? ", atualizado" : ""})`).join("; ") || "nenhum projeto marcado"}${publicacao.mudou ? " \xB7 o site ser\xE1 republicado" : " \xB7 nada mudou no site"}`] : [], md = resumoMarkdown(linhas, alertas, extra), issues = null;
   if (deps.github)
@@ -15845,7 +15898,7 @@ Os pain\xE9is continuam com a vers\xE3o anterior. No app: Bases \u2192 "${atual.
     }
   return { linhas, alertas, publicacao, issues, resumo: md, siteMudou: !!publicacao?.mudou };
 }
-var VERSAO_AUTOMACAO = "2026-10-22.5 (teto de download din\xE2mico)";
+var VERSAO_AUTOMACAO = "2026-10-22.6 (fontes cadastradas no app)";
 async function cli() {
   console.log(`DataDash \xB7 automa\xE7\xE3o vers\xE3o ${VERSAO_AUTOMACAO}`);
   let args = process.argv.slice(2), val = (k) => {
@@ -15859,7 +15912,15 @@ async function cli() {
       let s = await ctx.db.collection("datasets").doc(id).get();
       return s.exists ? s.data() : null;
     };
-    firebase = { store: ctx.store, loadDataset, publishSource: adminPublishSource2(ctx.db, ctx.store) };
+    firebase = {
+      store: ctx.store,
+      loadDataset,
+      publishSource: adminPublishSource2(ctx.db, ctx.store),
+      listarFontes: async () => (await ctx.db.collection("fontesAutomaticas").get()).docs.map((d) => ({ id: d.id, ...d.data() })),
+      gravarSituacao: async (id, situacao) => {
+        await ctx.db.collection("fontesAutomaticas").doc(id).set({ situacao }, { merge: !0 });
+      }
+    };
   }
   let github = !has("--sem-issues") && process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY ? { repo: process.env.GITHUB_REPOSITORY, token: process.env.GITHUB_TOKEN } : null, r = await executar({ dados, forcar: has("--forcar"), fonte: val("--fonte"), semPublicar: has("--sem-publicar") }, { fetcher: fetchPadrao, firebase, github, appDir });
   comFirebase || (r.resumo += "\n\n_Modo simplificado (sem Firebase): as bases do app se atualizam quando o app l\xEA o JSON de `final/`. Para o modo completo, configure os segredos do Firebase (ver README)._"), console.log(r.resumo), process.env.GITHUB_STEP_SUMMARY && appendFileSync(process.env.GITHUB_STEP_SUMMARY, r.resumo + `
