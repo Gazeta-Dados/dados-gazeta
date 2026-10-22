@@ -15845,7 +15845,9 @@ Os pain\xE9is continuam com a vers\xE3o anterior. No app: Bases \u2192 "${atual.
     }
   return { linhas, alertas, publicacao, issues, resumo: md, siteMudou: !!publicacao?.mudou };
 }
+var VERSAO_AUTOMACAO = "2026-10-22.5 (teto de download din\xE2mico)";
 async function cli() {
+  console.log(`DataDash \xB7 automa\xE7\xE3o vers\xE3o ${VERSAO_AUTOMACAO}`);
   let args = process.argv.slice(2), val = (k) => {
     let i = args.indexOf(k);
     return i >= 0 ? args[i + 1] : void 0;
@@ -15868,6 +15870,7 @@ process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1] && cli().c
   console.error("Falha geral da automa\xE7\xE3o:", e?.message || e), process.exit(1);
 });
 export {
+  VERSAO_AUTOMACAO,
   executar
 };
 /*! Bundled license information:
