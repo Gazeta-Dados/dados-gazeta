@@ -15094,7 +15094,7 @@ var init_publish = __esm({
 });
 
 // automation/run.ts
-import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync3, appendFileSync } from "fs";
+import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync3, appendFileSync, renameSync } from "fs";
 import { join as join4, dirname as dirname3 } from "path";
 import { fileURLToPath } from "url";
 
@@ -15429,14 +15429,14 @@ init_dataParser();
 init_dashboardFilters();
 var MAX_BYTES = 1024 * 1024 * 1024, MAX_BRUTO_NO_REPO = 90 * 1024 * 1024;
 function criarFetcher(opts = {}) {
-  let inatividadeMs = opts.inatividadeMs ?? 12e4, totalMs = opts.totalMs ?? 15 * 6e4, tentativas = opts.tentativas ?? 2, umaVez = async (url) => {
+  let inatividadeMs = opts.inatividadeMs ?? 12e4, totalMs = opts.totalMs ?? 45 * 6e4, tentativas = opts.tentativas ?? 2, umaVez = async (url, limiteTotal) => {
     let ctrl = new AbortController(), motivo = "", parado, rearmar = () => {
       parado && clearTimeout(parado), parado = setTimeout(() => {
         motivo = `o servidor ficou ${Math.round(inatividadeMs / 1e3)} segundos sem enviar dados`, ctrl.abort();
       }, inatividadeMs);
     }, teto = setTimeout(() => {
-      motivo = `passou de ${Math.round(totalMs / 6e4)} minutos (o portal est\xE1 lento); a automa\xE7\xE3o tenta de novo na pr\xF3xima execu\xE7\xE3o`, ctrl.abort();
-    }, totalMs);
+      motivo = `passou de ${Math.round(limiteTotal / 6e4)} minutos, o tempo que restava nesta execu\xE7\xE3o (o portal est\xE1 lento); a automa\xE7\xE3o tenta de novo na pr\xF3xima execu\xE7\xE3o`, ctrl.abort();
+    }, limiteTotal);
     rearmar();
     try {
       let res = await fetch(url, { redirect: "follow", signal: ctrl.signal, headers: { "User-Agent": "DataDash-Automacao/1.0 (+jornalismo de dados)" } }), len = Number(res.headers.get("content-length") || 0);
@@ -15459,11 +15459,11 @@ function criarFetcher(opts = {}) {
       clearTimeout(teto), parado && clearTimeout(parado);
     }
   };
-  return async (url) => {
-    let ultimo;
+  return async (url, o) => {
+    let ultimo, fim = Date.now() + (o?.totalMs ?? totalMs);
     for (let i = 1; i <= tentativas; i++)
       try {
-        return await umaVez(url);
+        return await umaVez(url, Math.max(1e3, fim - Date.now()));
       } catch (e) {
         if (ultimo = e, !/fetch failed|terminated|UND_ERR|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket|sem enviar dados/i.test(String(e?.message) + String(e?.cause?.code || "")) || i === tentativas) break;
         await new Promise((r) => setTimeout(r, process.env.DD_TESTE_RAPIDO ? 100 : 5e3));
@@ -15511,8 +15511,8 @@ async function recursosCkan(f, now, fetcher) {
   })), !lista.length) throw new Error(`nenhum arquivo do conjunto "${c.conjunto}" corresponde a ${c.recurso ? `"${resolverUrl(c.recurso, now)}"` : "o formato pedido"} (o portal pode ainda n\xE3o ter publicado)`);
   return lista.sort((a, b) => b.atualizadoEm.localeCompare(a.atualizadoEm)), c.combinar ? lista.sort((a, b) => (anoDe(a.nome) ?? anoDe(a.url) ?? 0) - (anoDe(b.nome) ?? anoDe(b.url) ?? 0)) : [lista[0]];
 }
-async function baixarParte(f, nome, url, fetcher) {
-  let res = await fetcher(url);
+async function baixarParte(f, nome, url, fetcher, totalMs) {
+  let res = await fetcher(url, totalMs ? { totalMs } : void 0);
   if (res.status >= 400) throw new Error(`a fonte respondeu HTTP ${res.status} (${url})`);
   if (!res.body.length) throw new Error(`a fonte respondeu vazio (${nome})`);
   let head = res.body.subarray(0, 300).toString("utf-8").trimStart().toLowerCase();
@@ -15566,7 +15566,12 @@ async function lerLinhas(f, body, formato, aoLer) {
 }
 var slug = (s) => normalizarNome(s).replace(/ /g, "-").slice(0, 60) || "arquivo";
 async function processarFonte(f, estado, dir, now, fetcher, municipios, opts = {}) {
-  let inicio = opts.inicio ?? Date.now(), prazo = opts.prazoMs ?? 12 * 6e4, brt2 = new Date(now.getTime() - 3 * 36e5), mesAtual = brt2.toISOString().slice(0, 7), cfg = sha256(JSON.stringify({ t: f.tratamento || null, planilha: f.planilha, cab: f.linha_cabecalho, zip: f.arquivo_no_zip, json: f.caminho_json, formato: f.formato })), podeReaproveitar = !!f.tratamento?.agrupar?.por?.length && !f.dados_pessoais, pastaCache = join2(dir, "estado", "cache", pastaFonte(f)), alvos;
+  let inicio = opts.inicio ?? Date.now(), prazo = opts.prazoMs ?? 45 * 6e4, MINIMO_PARA_COMECAR = 10 * 6e4, salvar = () => {
+    try {
+      opts.aoConcluirArquivo?.();
+    } catch {
+    }
+  }, log = (m) => console.log(`[${f.id}] ${m}`), brt2 = new Date(now.getTime() - 3 * 36e5), mesAtual = brt2.toISOString().slice(0, 7), cfg = sha256(JSON.stringify({ t: f.tratamento || null, planilha: f.planilha, cab: f.linha_cabecalho, zip: f.arquivo_no_zip, json: f.caminho_json, formato: f.formato })), podeReaproveitar = !!f.tratamento?.agrupar?.por?.length && !f.dados_pessoais, pastaCache = join2(dir, "estado", "cache", pastaFonte(f)), alvos;
   f.arquivo ? alvos = [{ chave: slug(basename2(f.arquivo)), nome: basename2(f.arquivo), local: f.arquivo }] : f.ckan ? alvos = (await recursosCkan(f, now, fetcher)).map((r) => ({ chave: slug(r.nome), nome: r.nome, url: r.url, atualizadoEm: r.atualizadoEm || void 0 })) : alvos = [{ chave: slug(f.id), nome: f.id, url: resolverUrl(f.url || "", now) }], estado.partes = estado.partes || {};
   let global2 = new Tratador(f.tratamento, municipios, now), hashes = {}, arquivosBrutos = [], avisos = [], urls = [], baixados = 0, reaproveitados = 0, feitos = 0, lerCache = (chave) => {
     let arq = join2(pastaCache, `${chave}.json`);
@@ -15587,21 +15592,27 @@ async function processarFonte(f, estado, dir, now, fetcher, municipios, opts = {
         continue;
       }
     }
-    if (Date.now() - inicio > prazo) return { mudou: !1, incompleto: { feitos, total: alvos.length }, avisos, hash: estado.hash || "", arquivosBrutos, baixados, reaproveitados };
+    let restante = prazo - (Date.now() - inicio);
+    if (!a.local && restante < MINIMO_PARA_COMECAR)
+      return log(`tempo desta execu\xE7\xE3o esgotado; continua na pr\xF3xima (${feitos} de ${alvos.length} arquivos prontos)`), { mudou: !1, incompleto: { feitos, total: alvos.length }, avisos, hash: estado.hash || "", arquivosBrutos, baixados, reaproveitados };
     let body, finalUrl;
     if (a.local) {
       let caminho = join2(dir, a.local);
       if (!existsSync2(caminho)) throw new Error(`planilha n\xE3o encontrada em ${a.local}. Envie o arquivo pelo site do GitHub para essa pasta, com esse nome.`);
       if (body = readFileSync2(caminho), finalUrl = a.local, !body.length) throw new Error(`a planilha ${a.local} est\xE1 vazia`);
     } else {
-      let p = await baixarParte(f, a.nome, a.url, fetcher);
+      let t0 = Date.now();
+      log(`baixando ${a.nome}\u2026`);
+      let p = await baixarParte(f, a.nome, a.url, fetcher, Math.max(6e4, prazo - (Date.now() - inicio) - 6e4));
       body = p.body, finalUrl = p.finalUrl, baixados++;
+      let seg = Math.round((Date.now() - t0) / 1e3);
+      log(`${a.nome}: ${(body.length / 1048576).toFixed(1).replace(".", ",")} MB em ${seg < 90 ? `${seg} s` : `${Math.round(seg / 60)} min`}`);
     }
     let formato = detectarFormato(f, body, finalUrl), hash = sha256(body);
     if (hashes[a.chave] = hash, urls.push(finalUrl), prev?.hash === hash) {
       let c = lerCache(a.chave);
       if (c) {
-        global2.mesclar(c), estado.partes[a.chave] = { ...prev, atualizadoEm: a.atualizadoEm, verificadoEm: now.toISOString() }, feitos++;
+        global2.mesclar(c), estado.partes[a.chave] = { ...prev, atualizadoEm: a.atualizadoEm, verificadoEm: now.toISOString() }, feitos++, salvar(), log(`${a.nome}: sem mudan\xE7a`);
         continue;
       }
     }
@@ -15615,10 +15626,10 @@ async function processarFonte(f, estado, dir, now, fetcher, municipios, opts = {
         }
     }
     a.local && arquivosBrutos.push(a.local);
-    let tp = new Tratador(f.tratamento, municipios, now);
-    if (!await lerLinhas(f, body, formato, (r) => tp.adicionar(tp.linha(r)))) throw new Error(`nenhum registro lido de "${a.nome}"`);
+    let tp = new Tratador(f.tratamento, municipios, now), lidas = await lerLinhas(f, body, formato, (r) => tp.adicionar(tp.linha(r)));
+    if (!lidas) throw new Error(`nenhum registro lido de "${a.nome}"`);
     let parcial = tp.parcial();
-    podeReaproveitar && (mkdirSync(pastaCache, { recursive: !0 }), writeFileSync(join2(pastaCache, `${a.chave}.json`), JSON.stringify({ cfg, mesAndamento: tp.descartouMesEmAndamento ? mesAtual : null, parcial }))), global2.mesclar(parcial), estado.partes[a.chave] = { ...estado.partes[a.chave] || {}, hash, atualizadoEm: a.atualizadoEm, verificadoEm: now.toISOString() }, feitos++;
+    podeReaproveitar && (mkdirSync(pastaCache, { recursive: !0 }), writeFileSync(join2(pastaCache, `${a.chave}.json`), JSON.stringify({ cfg, mesAndamento: tp.descartouMesEmAndamento ? mesAtual : null, parcial }))), global2.mesclar(parcial), estado.partes[a.chave] = { ...estado.partes[a.chave] || {}, hash, atualizadoEm: a.atualizadoEm, verificadoEm: now.toISOString() }, feitos++, salvar(), log(`${a.nome}: tratado (${lidas.toLocaleString("pt-BR")} linhas lidas) e guardado`);
   }
   let assinatura = sha256(Object.keys(hashes).sort().map((k) => `${k}:${hashes[k]}`).join("|") + "|" + cfg + (f.tratamento?.descartar_mes_em_andamento ? "|" + mesAtual : ""));
   if (estado.hash === assinatura) return { mudou: !1, avisos, hash: assinatura, arquivosBrutos, baixados, reaproveitados };
@@ -15705,7 +15716,10 @@ function resumoMarkdown(linhas, alertas, extra = []) {
 // automation/run.ts
 var rotulo = (f) => f.projeto ? `[${f.projeto}] ${f.nome}` : f.nome;
 async function executar(opts, deps) {
-  let now = opts.agora || /* @__PURE__ */ new Date(), inicio = Date.now(), prazoMs = (opts.prazoMinutos ?? 12) * 6e4, config = loadConfigDir(opts.dados), estadoPath = join4(opts.dados, "estado", "fontes.json"), estado = existsSync4(estadoPath) ? JSON.parse(readFileSync4(estadoPath, "utf-8")) : {}, alertas = [], linhas = [], novosFinais = /* @__PURE__ */ new Map(), municipios = [];
+  let now = opts.agora || /* @__PURE__ */ new Date(), inicio = Date.now(), prazoMs = (opts.prazoMinutos ?? 45) * 6e4, gravarEstado = () => {
+    mkdirSync3(dirname3(estadoPath), { recursive: !0 }), writeFileSync3(estadoPath + ".tmp", JSON.stringify(estado, null, 2) + `
+`), renameSync(estadoPath + ".tmp", estadoPath);
+  }, config = loadConfigDir(opts.dados), estadoPath = join4(opts.dados, "estado", "fontes.json"), estado = existsSync4(estadoPath) ? JSON.parse(readFileSync4(estadoPath, "utf-8")) : {}, alertas = [], linhas = [], novosFinais = /* @__PURE__ */ new Map(), municipios = [];
   if (config.fontes.some((f) => f.ativo !== !1 && f.tratamento?.municipio))
     try {
       municipios = await carregarMunicipios(opts.dados, deps.fetcher);
@@ -15721,7 +15735,8 @@ async function executar(opts, deps) {
       continue;
     }
     try {
-      let c = await processarFonte(f, st, opts.dados, now, deps.fetcher, municipios, { prazoMs, inicio });
+      estado[f.id] = st;
+      let c = await processarFonte(f, st, opts.dados, now, deps.fetcher, municipios, { prazoMs, inicio, aoConcluirArquivo: gravarEstado });
       if (c.incompleto) {
         linhas.push({ fonte: rotulo(f), resultado: "\u23F3 em andamento", detalhe: `${c.incompleto.feitos} de ${c.incompleto.total} arquivos processados; continua na pr\xF3xima execu\xE7\xE3o` }), estado[f.id] = st;
         continue;
@@ -15820,8 +15835,7 @@ Os pain\xE9is continuam com a vers\xE3o anterior. No app: Bases \u2192 "${atual.
     } catch (e) {
       alertas.push({ chave: "publicacao", gravidade: "erro", titulo: "Falha ao gerar os sites publicados", corpo: String(e?.message || e) });
     }
-  mkdirSync3(dirname3(estadoPath), { recursive: !0 }), writeFileSync3(estadoPath, JSON.stringify(estado, null, 2) + `
-`);
+  gravarEstado();
   let extra = publicacao ? [`**Publica\xE7\xE3o:** ${publicacao.projetos.map((p) => `${p.nome} (${p.paginas} p\xE1ginas${p.mudou ? ", atualizado" : ""})`).join("; ") || "nenhum projeto marcado"}${publicacao.mudou ? " \xB7 o site ser\xE1 republicado" : " \xB7 nada mudou no site"}`] : [], md = resumoMarkdown(linhas, alertas, extra), issues = null;
   if (deps.github)
     try {
