@@ -30,7 +30,7 @@ concurrency:
 jobs:
   atualizar:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 180  # até 3 h (o GitHub permite 6 h); a coleta usa até DD_PRAZO_MINUTOS e o que faltar continua na próxima execução
     outputs:
       publicar: ${{ steps.run.outputs.site_mudou == 'true' || inputs.republicar == true }}
     env:
@@ -48,8 +48,10 @@ jobs:
       # ── Modo simplificado: coleta, histórico, tratamento, JSON final e avisos ──
       - name: Coletar e tratar (modo simplificado)
         if: env.MODO_COMPLETO != 'true'
+        timeout-minutes: 170
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          DD_PRAZO_MINUTOS: 150   # tempo de coleta por execução (ajuste aqui, se precisar)
           FORCAR: ${{ inputs.forcar }}
           FONTE: ${{ inputs.fonte }}
         run: |
@@ -83,8 +85,10 @@ jobs:
       - name: Coletar, tratar, sincronizar e gerar os sites (modo completo)
         id: run
         if: env.MODO_COMPLETO == 'true'
+        timeout-minutes: 170
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          DD_PRAZO_MINUTOS: 150   # tempo de coleta por execução (ajuste aqui, se precisar)
           FORCAR: ${{ inputs.forcar }}
           FONTE: ${{ inputs.fonte }}
         run: |
@@ -97,10 +101,13 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/firebase-sa.json"
 
+      # Roda SEMPRE, mesmo se a coleta for interrompida: o progresso (anos já processados) nunca se perde
       - name: Gravar bruto, final e estado no repositório
+        if: always()
         run: |
           git config user.name "automacao-dados"
           git config user.email "automacao-dados@users.noreply.github.com"
+          rm -f estado/*.tmp
           git add bruto final estado referencias 2>/dev/null || true
           if git diff --cached --quiet; then echo "Nada novo para gravar."; else
             git commit -m "Dados atualizados em $(date '+%d/%m/%Y %H:%M')"
