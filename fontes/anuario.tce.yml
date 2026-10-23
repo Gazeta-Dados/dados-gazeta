@@ -1,0 +1,88 @@
+# ════════════════════════════════════════════════════════════════════════════
+# TCE-ES: INDICADORES FISCAIS DOS 78 MUNICÍPIOS — projeto "anuario"
+# Cinco CSV pequenos (uma linha por município e ano), no portal do ES. Guardados como
+# estão, sem somar (os números no formato brasileiro são convertidos sozinhos). Depois da primeira coleta, com as colunas à vista, dá para
+# acrescentar a padronização dos nomes dos municípios (código do IBGE).
+# ════════════════════════════════════════════════════════════════════════════
+
+fontes:
+
+  # aplicação em saúde (mínimo constitucional de 15%)
+  - id: tce-saude-municipios
+    nome: Saúde dos municípios (TCE-ES)
+    ativo: true
+    url: https://dados.es.gov.br/dataset/c2d74fcf-5163-463c-9f5a-48e0e082c1b3/resource/f472ae45-a039-4d10-b029-fe6a2367b2a6/download/municipios-saude.csv
+    formato: csv
+    agenda:
+      frequencia: mensal               # o TCE atualiza sem data fixa: conferência mensal basta
+      dia_do_mes: 20
+      hora: "06:00"
+    max_dias_sem_novidade: 400         # dado anual: só avisa se ficar mais de um ano parado
+    fonte_credito: Tribunal de Contas do Estado do Espírito Santo (TCE-ES), via dados.es.gov.br
+    # dataset_id: "COLE_AQUI_O_ID_DA_BASE"
+    tratamento:
+      numeros_br_automaticos: true     # "1.234,56" e "16,20" viram números; códigos e anos ficam como estão
+
+  # aplicação em educação (mínimo de 25% e Fundeb)
+  - id: tce-educacao-municipios
+    nome: Educação dos municípios (TCE-ES)
+    ativo: true
+    url: https://dados.es.gov.br/dataset/c2d74fcf-5163-463c-9f5a-48e0e082c1b3/resource/015c1dad-5842-44e8-a307-68eafe6de28e/download/municipios-educacao.csv
+    formato: csv
+    agenda:
+      frequencia: mensal               # o TCE atualiza sem data fixa: conferência mensal basta
+      dia_do_mes: 20
+      hora: "06:00"
+    max_dias_sem_novidade: 400         # dado anual: só avisa se ficar mais de um ano parado
+    fonte_credito: Tribunal de Contas do Estado do Espírito Santo (TCE-ES), via dados.es.gov.br
+    # dataset_id: "COLE_AQUI_O_ID_DA_BASE"
+    tratamento:
+      numeros_br_automaticos: true     # "1.234,56" e "16,20" viram números; códigos e anos ficam como estão
+
+  # despesa com pessoal em relação ao limite da LRF
+  - id: tce-pessoal-municipios
+    nome: Pessoal dos municípios (TCE-ES)
+    ativo: true
+    url: https://dados.es.gov.br/dataset/c2d74fcf-5163-463c-9f5a-48e0e082c1b3/resource/45c257a8-5b35-4486-af5c-5bfbc453304a/download/municipios-pessoal.csv
+    formato: csv
+    agenda:
+      frequencia: mensal               # o TCE atualiza sem data fixa: conferência mensal basta
+      dia_do_mes: 20
+      hora: "06:00"
+    max_dias_sem_novidade: 400         # dado anual: só avisa se ficar mais de um ano parado
+    fonte_credito: Tribunal de Contas do Estado do Espírito Santo (TCE-ES), via dados.es.gov.br
+    # dataset_id: "COLE_AQUI_O_ID_DA_BASE"
+    tratamento:
+      numeros_br_automaticos: true     # "1.234,56" e "16,20" viram números; códigos e anos ficam como estão
+
+  # receita corrente líquida, base dos limites da LRF
+  - id: tce-rcl-municipios
+    nome: Receita Corrente Líquida dos municípios (TCE-ES)
+    ativo: true
+    url: https://dados.es.gov.br/dataset/c2d74fcf-5163-463c-9f5a-48e0e082c1b3/resource/4bbc4025-d96f-437d-837f-acc1089e5fa5/download/rcl.csv
+    formato: csv
+    agenda:
+      frequencia: mensal               # o TCE atualiza sem data fixa: conferência mensal basta
+      dia_do_mes: 20
+      hora: "06:00"
+    max_dias_sem_novidade: 400         # dado anual: só avisa se ficar mais de um ano parado
+    fonte_credito: Tribunal de Contas do Estado do Espírito Santo (TCE-ES), via dados.es.gov.br
+    # dataset_id: "COLE_AQUI_O_ID_DA_BASE"
+    tratamento:
+      numeros_br_automaticos: true     # "1.234,56" e "16,20" viram números; códigos e anos ficam como estão
+
+  # dívida consolidada
+  - id: tce-endividamento-municipios
+    nome: Endividamento dos municípios (TCE-ES)
+    ativo: true
+    url: https://dados.es.gov.br/dataset/c2d74fcf-5163-463c-9f5a-48e0e082c1b3/resource/359ca7d9-dea6-4741-a137-210b2cb63961/download/endividamento.csv
+    formato: csv
+    agenda:
+      frequencia: mensal               # o TCE atualiza sem data fixa: conferência mensal basta
+      dia_do_mes: 20
+      hora: "06:00"
+    max_dias_sem_novidade: 400         # dado anual: só avisa se ficar mais de um ano parado
+    fonte_credito: Tribunal de Contas do Estado do Espírito Santo (TCE-ES), via dados.es.gov.br
+    # dataset_id: "COLE_AQUI_O_ID_DA_BASE"
+    tratamento:
+      numeros_br_automaticos: true     # "1.234,56" e "16,20" viram números; códigos e anos ficam como estão
