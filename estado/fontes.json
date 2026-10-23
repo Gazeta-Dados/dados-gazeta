@@ -18,10 +18,36 @@
         "hash": "51b2ab51b80b1ae9c916ef6d6811edc68b7d556c7cae1dc5af1fcf8f46af0319",
         "atualizadoEm": "2026-10-16T20:14:24.681829",
         "verificadoEm": "2026-10-23T12:08:05.233Z"
+      },
+      "receitas-2022-csv": {
+        "hash": "a588558343cbaf978a31634315a17c237786de37e2255288a5edcf3d05c5eecf",
+        "atualizadoEm": "2026-10-16T20:16:59.806195",
+        "verificadoEm": "2026-10-23T17:46:51.167Z"
+      },
+      "receitas-2023-csv": {
+        "hash": "5e2acab5fcfd6da1acc6791efeb88fbce25beac24584ed92cc37c7b1558f9983",
+        "atualizadoEm": "2026-10-20T17:14:50.369914",
+        "verificadoEm": "2026-10-23T17:46:51.167Z"
+      },
+      "receitas-2024-csv": {
+        "hash": "7a1e43f9e296d011317418fb2dcdb29f46daa64b37e79e9503b733a82e907a51",
+        "atualizadoEm": "2026-10-16T20:22:16.667574",
+        "verificadoEm": "2026-10-23T17:46:51.167Z"
+      },
+      "receitas-2025-csv": {
+        "hash": "8a0fc056f9d206d08e5a65dccd378e7e49279f19548e7ed147a351de4f143715",
+        "atualizadoEm": "2026-10-16T20:25:09.271493",
+        "verificadoEm": "2026-10-23T17:46:51.167Z"
+      },
+      "receitas-2026-csv": {
+        "hash": "2733758977cadfd90fe46a139a1e6cb46bd74ecf8fc9a8b573784530cd307acd",
+        "atualizadoEm": "2026-10-23T08:37:54.964134",
+        "verificadoEm": "2026-10-23T17:46:51.167Z"
       }
     },
-    "ultimaVerificacao": "2026-10-23T12:08:05.233Z",
-    "ultimoErro": "terminated",
-    "ultimoErroEm": "2026-10-23T12:08:05.233Z"
+    "ultimaVerificacao": "2026-10-23T17:46:51.167Z",
+    "hash": "f59864ee8aeef594fa2b8ebce36d33caef30ad3b9f555fd76a22a8fd501cce52",
+    "ultimaNovidade": "2026-10-23T17:46:51.167Z",
+    "avisos": []
   }
 }
