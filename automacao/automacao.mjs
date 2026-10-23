@@ -11555,6 +11555,93 @@ var require_lib3 = __commonJS({
   }
 });
 
+// src/lib/ibgeFormatos.ts
+function ehIbgeAgregados(d) {
+  return Array.isArray(d) && d.length > 0 && d.every((v) => v && typeof v == "object" && "variavel" in v && Array.isArray(v.resultados));
+}
+function valorIbge(v) {
+  if (v == null) return null;
+  let s = String(v).trim();
+  if (s === "-") return 0;
+  if (s === "" || s === "..." || s === ".." || /^x$/i.test(s)) return null;
+  let n = Number(s);
+  return isFinite(n) ? n : null;
+}
+function achatarIbgeAgregados(d) {
+  let linhas = [];
+  for (let variavel of d)
+    for (let r of variavel.resultados || []) {
+      let cats = {};
+      for (let c of r.classificacoes || []) {
+        let valores = Object.values(c.categoria || {});
+        c.nome && (cats[c.nome] = valores.length === 1 ? valores[0] : valores.join(" / "));
+      }
+      for (let s of r.series || []) {
+        let loc = s.localidade || {}, nivel = loc.nivel?.nome || loc.nivel?.id || "", nome = String(loc.nome || "");
+        for (let [periodo, valor] of Object.entries(s.serie || {})) {
+          let p = String(periodo), linha = {
+            cod_ibge: String(loc.id ?? ""),
+            localidade: nome,
+            .../munic/i.test(nivel) || loc.nivel?.id === "N6" ? { municipio: nome.replace(/\s+-\s+[A-Z]{2}$/, "") } : {},
+            nivel,
+            variavel: variavel.variavel,
+            unidade: variavel.unidade,
+            periodo: p,
+            .../^\d{4}$/.test(p) ? { ano: Number(p) } : /^\d{6}$/.test(p) ? { ano: Number(p.slice(0, 4)), mes: Number(p.slice(4)) } : {},
+            ...cats,
+            valor: valorIbge(valor),
+            ...valorIbge(valor) === null && valor !== null && valor !== void 0 && String(valor).trim() !== "" ? { valor_simbolo: String(valor).trim() } : {}
+          };
+          linhas.push(linha);
+        }
+      }
+    }
+  return linhas;
+}
+function achatarObjetos(registros) {
+  if (!registros.some((r) => r && Object.values(r).some((v) => ehObjetoSimples(v) || Array.isArray(v)))) return registros;
+  let achatar = (obj, prefixo, saida, nivel) => {
+    for (let [k, v] of Object.entries(obj)) {
+      let chave = prefixo ? `${prefixo}_${k}` : k;
+      ehObjetoSimples(v) && nivel < 6 ? achatar(v, chave, saida, nivel + 1) : Array.isArray(v) ? saida[chave] = v.every((x) => !ehObjetoSimples(x)) ? v.join(", ") : JSON.stringify(v) : saida[chave] = v;
+    }
+    return saida;
+  };
+  return registros.map((r) => r && typeof r == "object" ? achatar(r, "", {}, 1) : r);
+}
+function ehIbgePesquisas(d) {
+  return Array.isArray(d) && d.length > 0 && d.every((v) => v && typeof v == "object" && "id" in v && Array.isArray(v.res) && v.res.every((r) => r && typeof r == "object" && "localidade" in r && r.res && typeof r.res == "object"));
+}
+function achatarIbgePesquisas(d) {
+  let linhas = [];
+  for (let ind of d) {
+    let id = String(ind.id);
+    for (let r of ind.res || [])
+      for (let [periodo, valor] of Object.entries(r.res || {})) {
+        let p = String(periodo), v = valorIbge(valor);
+        linhas.push({
+          indicador_id: id,
+          indicador: INDICADORES_CONHECIDOS[id] || `Indicador ${id}`,
+          cod_ibge: String(r.localidade ?? ""),
+          periodo: p,
+          .../^\d{4}$/.test(p) ? { ano: Number(p) } : {},
+          valor: v,
+          ...v === null && valor !== null && valor !== void 0 && String(valor).trim() !== "" ? { valor_simbolo: String(valor).trim() } : {}
+        });
+      }
+  }
+  return linhas;
+}
+var ehObjetoSimples, INDICADORES_CONHECIDOS, init_ibgeFormatos = __esm({
+  "src/lib/ibgeFormatos.ts"() {
+    ehObjetoSimples = (v) => v !== null && typeof v == "object" && !Array.isArray(v) && !(v instanceof Date);
+    INDICADORES_CONHECIDOS = {
+      30255: "IDEB \u2013 Anos iniciais do ensino fundamental (rede p\xFAblica)",
+      30256: "IDEB \u2013 Anos finais do ensino fundamental (rede p\xFAblica)"
+    };
+  }
+});
+
 // src/lib/datadashPackage.ts
 function ehPacoteDatadash(d) {
   return !!d && typeof d == "object" && !Array.isArray(d) && Array.isArray(d.registros) && Array.isArray(d.colunas) && d.meta && typeof d.meta == "object" && d.colunas.every((c) => c && typeof c.chave == "string");
@@ -11613,6 +11700,18 @@ function parseCSV(csvText) {
   });
 }
 function extractJsonRecords(data, manualPath) {
+  if ((!manualPath || !manualPath.trim()) && ehIbgeAgregados(data)) {
+    let records = achatarIbgeAgregados(data);
+    return { records, detectedPath: "IBGE (agregados)", candidatePaths: [{ path: "IBGE (agregados)", count: records.length }] };
+  }
+  if ((!manualPath || !manualPath.trim()) && ehIbgePesquisas(data)) {
+    let records = achatarIbgePesquisas(data);
+    return { records, detectedPath: "IBGE (pesquisas/indicadores)", candidatePaths: [{ path: "IBGE (pesquisas/indicadores)", count: records.length }] };
+  }
+  let r = extrairRegistrosJson(data, manualPath);
+  return { ...r, records: achatarObjetos(r.records) };
+}
+function extrairRegistrosJson(data, manualPath) {
   if (!data)
     return { records: [], detectedPath: "", candidatePaths: [] };
   if (Array.isArray(data)) {
@@ -11888,6 +11987,7 @@ function reconcileSyncedRecords(ds, incomingRecords) {
 }
 var import_papaparse, init_dataParser = __esm({
   "src/lib/dataParser.ts"() {
+    init_ibgeFormatos();
     init_datadashPackage();
     import_papaparse = __toESM(require_papaparse(), 1);
   }
@@ -15198,7 +15298,7 @@ function revisar(item) {
 function conjuntosDoCatalogo() {
   return PUBLIC_API_CATALOG.filter((x) => x.ckan).map((x) => ({ id: x.id, nome: x.shortTitle, portal: x.ckan.portal, conjunto: x.ckan.conjunto, verificacao: x.verificacao }));
 }
-var CATALOGO_ORIGINAL, NAO_VERIFICADO, REVISAO, ORIGEM_LISTA, LINK_CONFERIDO, ckanES, LINK_CONFERIDO_AREA, portalES, CATALOGO_ACRESCIMOS, PUBLIC_API_CATALOG, init_apiCatalog = __esm({
+var CATALOGO_ORIGINAL, NAO_VERIFICADO, SERIE_BCB, REVISAO, ORIGEM_LISTA, LINK_SEGURANCA, SENSIVEL_SEGURANCA, VITIMAS, ORIGEM_TEMPO_REAL, ORIGEM_COMEX, CERT_COMEX, AGENDA_COMEX, SINAL_COMEX, ORIGEM_EDU, ORIGEM_IBGE, AGREGADOS, LINK_CONFERIDO, ckanES, LINK_CONFERIDO_AREA, portalES, CATALOGO_ACRESCIMOS, PUBLIC_API_CATALOG, init_apiCatalog = __esm({
   "src/lib/apiCatalog.ts"() {
     CATALOGO_ORIGINAL = [
       // ==========================================
@@ -15570,7 +15670,12 @@ var CATALOGO_ORIGINAL, NAO_VERIFICADO, REVISAO, ORIGEM_LISTA, LINK_CONFERIDO, ck
         suggestedName: "Banco Central - Infla\xE7\xE3o IPCA Mensal",
         tags: ["ipca", "infla\xE7\xE3o", "pre\xE7os", "banco central", "economia"]
       }
-    ], NAO_VERIFICADO = "Sugest\xE3o gerada automaticamente e ainda n\xE3o conferida: abra a p\xE1gina do portal e confira se o arquivo existe, de quando \xE9 e quais colunas tem antes de usar.", REVISAO = {
+    ], NAO_VERIFICADO = "Sugest\xE3o gerada automaticamente e ainda n\xE3o conferida: abra a p\xE1gina do portal e confira se o arquivo existe, de quando \xE9 e quais colunas tem antes de usar.", SERIE_BCB = (serie, n = 24) => ({
+      url: `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serie}/dados/ultimos/${n}?formato=json`,
+      formato: "json",
+      agenda: { frequencia: "semanal", dia_da_semana: 4, hora: "06:00" },
+      tratamento: { decimal: "ponto", numeros: ["valor"] }
+    }), REVISAO = {
       // Conferido: a coleta automática real funcionou com este conjunto em 22/10/2026
       es_receitas_arrecadadas: {
         name: "Receitas do Estado do ES (Portal da Transpar\xEAncia / SEFAZ)",
@@ -15602,19 +15707,1348 @@ var CATALOGO_ORIGINAL, NAO_VERIFICADO, REVISAO, ORIGEM_LISTA, LINK_CONFERIDO, ck
         url: "https://apidatalake.tesouro.gov.br/ords/siconfi/tt/dca?an_exercicio={{PREV_YYYY}}&id_ente=32",
         avisos: ["O c\xF3digo id_ente=32 \xE9 o do Estado do Esp\xEDrito Santo (n\xE3o das prefeituras). Cada munic\xEDpio tem o pr\xF3prio c\xF3digo do IBGE.", "Usa o ano anterior ({{PREV_YYYY}}): o balan\xE7o do ano s\xF3 sai no ano seguinte."]
       },
+      fed_ibge_municipios_es: {
+        shortTitle: "Munic\xEDpios do ES (IBGE)",
+        avisos: ["Lista oficial dos 78 munic\xEDpios com o c\xF3digo do IBGE de 7 d\xEDgitos: a chave para cruzar tabelas e mapas. As regi\xF5es v\xEAm em colunas (microrregiao_nome, microrregiao_mesorregiao_nome\u2026)."]
+      },
       fed_ibge_noticias: { avisos: ["S\xE3o not\xEDcias do IBGE, n\xE3o uma s\xE9rie estat\xEDstica: n\xE3o servem como base de dados para pain\xE9is."] },
       fed_bcb_ptax: {
         url: "https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoDolarPeriodo(dataInicial=@dataInicial,dataFinalCotacao=@dataFinalCotacao)?@dataInicial='01-01-{{YYYY}}'&@dataFinalCotacao='12-31-{{YYYY}}'&$format=json",
         avisos: ["O endere\xE7o original tinha uma data fixa (sempre o mesmo dia). Agora traz as cota\xE7\xF5es do ano corrente."]
       },
-      fed_bcb_selic: { avisos: ["Traz s\xF3 os 30 registros mais recentes. Para uma s\xE9rie anual, pe\xE7a a s\xE9rie por per\xEDodo."] },
-      fed_bcb_ipca: { avisos: ["Traz s\xF3 os 24 meses mais recentes. Para uma s\xE9rie mais longa, pe\xE7a a s\xE9rie por per\xEDodo."] },
+      fed_bcb_selic: { fonteSugerida: SERIE_BCB(11, 30), avisos: ["Traz s\xF3 os 30 registros mais recentes. Para uma s\xE9rie anual, pe\xE7a a s\xE9rie por per\xEDodo."] },
+      fed_bcb_ipca: { fonteSugerida: SERIE_BCB(433, 24), avisos: ["Traz s\xF3 os 24 meses mais recentes. Para uma s\xE9rie mais longa, pe\xE7a a s\xE9rie por per\xEDodo."] },
       es_terceirizados: {
         dadosPessoais: !0,
         avisos: ["Pode conter nomes de pessoas (LGPD). Antes de usar, consulte o DPO; n\xE3o publique esses dados em reposit\xF3rio p\xFAblico."]
       }
     };
-    ORIGEM_LISTA = "Indicado na lista de fontes enviada pela reda\xE7\xE3o (out/2026), ainda n\xE3o conferido.", LINK_CONFERIDO = 'Link do conjunto informado pela reda\xE7\xE3o (out/2026). Antes de usar, confira os arquivos: se houver um por ano, marque "Juntar todos os arquivos"; se houver arquivos de assuntos diferentes, informe a parte do nome do arquivo desejado. A confer\xEAncia autom\xE1tica do cat\xE1logo lista os arquivos de cada conjunto.', ckanES = (conjunto, combinar = !1) => ({ portal: "https://dados.es.gov.br", conjunto, combinar }), LINK_CONFERIDO_AREA = "Arquivo confirmado pela reda\xE7\xE3o (out/2026): o conjunto tem um CSV por \xE1rea (Educa\xE7\xE3o, Pessoal, Sa\xFAde, Receita Corrente L\xEDquida (RCL), Endividamento). Pode ser importado direto no app ou virar fonte autom\xE1tica. Falta conferir as colunas: cole as primeiras linhas do arquivo na tela de colunas antes de usar.", portalES = (conjunto) => `https://dados.es.gov.br/dataset/${conjunto}`, CATALOGO_ACRESCIMOS = [
+    ORIGEM_LISTA = "Indicado na lista de fontes enviada pela reda\xE7\xE3o (out/2026), ainda n\xE3o conferido.", LINK_SEGURANCA = "Link do conjunto informado pela reda\xE7\xE3o (out/2026). Antes de usar, rode a confer\xEAncia autom\xE1tica do cat\xE1logo para ver os arquivos (um por ano? um s\xF3?) e confira as colunas.", SENSIVEL_SEGURANCA = "Tema sens\xEDvel (seguran\xE7a p\xFAblica): pela pol\xEDtica de IA da Gazeta, o uso na publica\xE7\xE3o passa pelo editor-chefe.", VITIMAS = "Se o arquivo for de microdados (uma linha por ocorr\xEAncia, com data, bairro, idade\u2026), o cruzamento pode identificar v\xEDtimas, sobretudo em munic\xEDpios pequenos. Para o anu\xE1rio, publique s\xF3 totais agregados (por munic\xEDpio, ano, m\xEAs) e consulte o DPO antes de guardar os microdados.", ORIGEM_TEMPO_REAL = "Indicado na lista de fontes de com\xE9rcio exterior em tempo real enviada pela reda\xE7\xE3o (out/2026), ainda n\xE3o conferido.", ORIGEM_COMEX = "Indicado na lista enviada pela reda\xE7\xE3o (out/2026). Endere\xE7os e colunas conforme a documenta\xE7\xE3o do Comex Stat, ainda n\xE3o conferidos.", CERT_COMEX = "Se a coleta falhar com erro de certificado, avise: o servidor do governo usa a cadeia ICP-Brasil, e a automa\xE7\xE3o precisar\xE1 inclu\xED-la.", AGENDA_COMEX = { frequencia: "diaria", hora: "06:00" }, SINAL_COMEX = "https://api-comexstat.mdic.gov.br/general/dates/updated", ORIGEM_EDU = "Indicado na lista de fontes de educa\xE7\xE3o enviada pela reda\xE7\xE3o (out/2026). Endere\xE7o e c\xF3digos ainda n\xE3o conferidos.", ORIGEM_IBGE = "API oficial do IBGE, indicada na lista enviada pela reda\xE7\xE3o (out/2026). Endere\xE7o, tabela e vari\xE1vel ainda n\xE3o conferidos.", AGREGADOS = 'Resposta da API de Agregados do IBGE: o app e a automa\xE7\xE3o j\xE1 transformam em tabela (uma linha por munic\xEDpio e ano, com cod_ibge, municipio, variavel, unidade, ano e valor). S\xEDmbolos do IBGE ("...", "X" sigiloso) viram vazio.', LINK_CONFERIDO = 'Link do conjunto informado pela reda\xE7\xE3o (out/2026). Antes de usar, confira os arquivos: se houver um por ano, marque "Juntar todos os arquivos"; se houver arquivos de assuntos diferentes, informe a parte do nome do arquivo desejado. A confer\xEAncia autom\xE1tica do cat\xE1logo lista os arquivos de cada conjunto.', ckanES = (conjunto, combinar = !1) => ({ portal: "https://dados.es.gov.br", conjunto, combinar }), LINK_CONFERIDO_AREA = "Arquivo confirmado pela reda\xE7\xE3o (out/2026): o conjunto tem um CSV por \xE1rea (Educa\xE7\xE3o, Pessoal, Sa\xFAde, Receita Corrente L\xEDquida (RCL), Endividamento). Pode ser importado direto no app ou virar fonte autom\xE1tica. Falta conferir as colunas: cole as primeiras linhas do arquivo na tela de colunas antes de usar.", portalES = (conjunto) => `https://dados.es.gov.br/dataset/${conjunto}`, CATALOGO_ACRESCIMOS = [
+      // ── Segurança pública do ES (links informados pela redação, out/2026) ──
+      {
+        id: "seg_homicidios_de_mulheres_e_feminicidios_2017_2025",
+        name: "Seguran\xE7a p\xFAblica do ES: Homic\xEDdios de mulheres e feminic\xEDdios (2017\u20132025)",
+        shortTitle: "Feminic\xEDdios 2017\u20132025",
+        category: "Seguran\xE7a p\xFAblica",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto homicidios-de-mulheres-e-feminicidios_2017_2025)",
+        url: portalES("homicidios-de-mulheres-e-feminicidios_2017_2025"),
+        pagina: portalES("homicidios-de-mulheres-e-feminicidios_2017_2025"),
+        ckan: ckanES("homicidios-de-mulheres-e-feminicidios_2017_2025"),
+        format: "CSV",
+        description: "Homic\xEDdios de mulheres e feminic\xEDdios no ES de 2017 a 2025.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Feminic\xEDdios 2017\u20132025",
+        tags: ["feminic\xEDdio", "homic\xEDdio", "mulheres", "viol\xEAncia de g\xEAnero", "seguran\xE7a p\xFAblica"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_SEGURANCA, SENSIVEL_SEGURANCA, VITIMAS, "A s\xE9rie completa soma este conjunto (2017\u20132025) com o do ano corrente (2026), que \xE9 publicado em separado.", "Marque a coluna do munic\xEDpio (se houver) para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "seg_homicidios_de_mulheres_e_feminicidios_2026",
+        name: "Seguran\xE7a p\xFAblica do ES: Homic\xEDdios de mulheres e feminic\xEDdios (2026)",
+        shortTitle: "Feminic\xEDdios 2026",
+        category: "Seguran\xE7a p\xFAblica",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto homicidios-de-mulheres-e-feminicidios_2026)",
+        url: portalES("homicidios-de-mulheres-e-feminicidios_2026"),
+        pagina: portalES("homicidios-de-mulheres-e-feminicidios_2026"),
+        ckan: ckanES("homicidios-de-mulheres-e-feminicidios_2026"),
+        format: "CSV",
+        description: "Homic\xEDdios de mulheres e feminic\xEDdios no ES em 2026 (ano corrente).",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Feminic\xEDdios 2026",
+        tags: ["feminic\xEDdio", "homic\xEDdio", "mulheres", "viol\xEAncia de g\xEAnero", "seguran\xE7a p\xFAblica"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_SEGURANCA, SENSIVEL_SEGURANCA, VITIMAS, "Ano corrente em conjunto pr\xF3prio: em 2027, o endere\xE7o provavelmente muda. Para a s\xE9rie, some com o conjunto 2017\u20132025.", "Marque a coluna do munic\xEDpio (se houver) para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "seg_homicido_feminicidio",
+        name: "Seguran\xE7a p\xFAblica do ES: Homic\xEDdio e feminic\xEDdio",
+        shortTitle: "Homic\xEDdio e feminic\xEDdio",
+        category: "Seguran\xE7a p\xFAblica",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto homicido-feminicidio)",
+        url: portalES("homicido-feminicidio"),
+        pagina: portalES("homicido-feminicidio"),
+        ckan: ckanES("homicido-feminicidio"),
+        format: "CSV",
+        description: "Conjunto de homic\xEDdios e feminic\xEDdios (confira o per\xEDodo e se repete os conjuntos acima).",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Homic\xEDdio e feminic\xEDdio",
+        tags: ["feminic\xEDdio", "homic\xEDdio", "seguran\xE7a p\xFAblica"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_SEGURANCA, SENSIVEL_SEGURANCA, VITIMAS, "Pode ser uma vers\xE3o anterior ou mais ampla dos conjuntos de feminic\xEDdios: compare antes de usar, para n\xE3o contar em dobro.", "Marque a coluna do munic\xEDpio (se houver) para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "seg_violencia_contra_mulher_lei_maria_da_penha_2026",
+        name: "Seguran\xE7a p\xFAblica do ES: Viol\xEAncia contra a mulher: Lei Maria da Penha (2026)",
+        shortTitle: "Lei Maria da Penha 2026",
+        category: "Seguran\xE7a p\xFAblica",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto violencia-contra-mulher_lei-maria-da-penha_2026)",
+        url: portalES("violencia-contra-mulher_lei-maria-da-penha_2026"),
+        pagina: portalES("violencia-contra-mulher_lei-maria-da-penha_2026"),
+        ckan: ckanES("violencia-contra-mulher_lei-maria-da-penha_2026"),
+        format: "CSV",
+        description: "Ocorr\xEAncias de viol\xEAncia contra a mulher enquadradas na Lei Maria da Penha em 2026.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Lei Maria da Penha 2026",
+        tags: ["viol\xEAncia contra a mulher", "maria da penha", "viol\xEAncia dom\xE9stica", "seguran\xE7a p\xFAblica"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_SEGURANCA, SENSIVEL_SEGURANCA, VITIMAS, "Ano corrente em conjunto pr\xF3prio: em 2027, o endere\xE7o provavelmente muda.", "Marque a coluna do munic\xEDpio (se houver) para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "seg_violencia_domestica",
+        name: "Seguran\xE7a p\xFAblica do ES: Viol\xEAncia dom\xE9stica",
+        shortTitle: "Viol\xEAncia dom\xE9stica",
+        category: "Seguran\xE7a p\xFAblica",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto violencia-domestica)",
+        url: portalES("violencia-domestica"),
+        pagina: portalES("violencia-domestica"),
+        ckan: ckanES("violencia-domestica"),
+        format: "CSV",
+        description: "Ocorr\xEAncias de viol\xEAncia dom\xE9stica no ES.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Viol\xEAncia dom\xE9stica",
+        tags: ["viol\xEAncia dom\xE9stica", "viol\xEAncia contra a mulher", "seguran\xE7a p\xFAblica"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_SEGURANCA, SENSIVEL_SEGURANCA, VITIMAS, "Marque a coluna do munic\xEDpio (se houver) para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "seg_crimes_informaticos",
+        name: "Seguran\xE7a p\xFAblica do ES: Crimes inform\xE1ticos",
+        shortTitle: "Crimes inform\xE1ticos",
+        category: "Seguran\xE7a p\xFAblica",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto crimes-informaticos)",
+        url: portalES("crimes-informaticos"),
+        pagina: portalES("crimes-informaticos"),
+        ckan: ckanES("crimes-informaticos"),
+        format: "CSV",
+        description: "Ocorr\xEAncias de crimes inform\xE1ticos (golpes e invas\xF5es pela internet) no ES.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Crimes inform\xE1ticos",
+        tags: ["crimes inform\xE1ticos", "internet", "golpes", "seguran\xE7a p\xFAblica"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_SEGURANCA, SENSIVEL_SEGURANCA, "Marque a coluna do munic\xEDpio (se houver) para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "seg_estelionato_fraude",
+        name: "Seguran\xE7a p\xFAblica do ES: Estelionato e fraude",
+        shortTitle: "Estelionato e fraude",
+        category: "Seguran\xE7a p\xFAblica",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto estelionato-fraude)",
+        url: portalES("estelionato-fraude"),
+        pagina: portalES("estelionato-fraude"),
+        ckan: ckanES("estelionato-fraude"),
+        format: "CSV",
+        description: "Ocorr\xEAncias de estelionato e fraude no ES.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Estelionato e fraude",
+        tags: ["estelionato", "fraude", "golpes", "seguran\xE7a p\xFAblica"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_SEGURANCA, SENSIVEL_SEGURANCA, "Marque a coluna do munic\xEDpio (se houver) para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "seg_roubo_a_pessoa",
+        name: "Seguran\xE7a p\xFAblica do ES: Roubo a pessoa",
+        shortTitle: "Roubo a pessoa",
+        category: "Seguran\xE7a p\xFAblica",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto roubo-a-pessoa)",
+        url: portalES("roubo-a-pessoa"),
+        pagina: portalES("roubo-a-pessoa"),
+        ckan: ckanES("roubo-a-pessoa"),
+        format: "CSV",
+        description: "Ocorr\xEAncias de roubo a pessoa no ES.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Roubo a pessoa",
+        tags: ["roubo", "pessoa", "seguran\xE7a p\xFAblica"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_SEGURANCA, SENSIVEL_SEGURANCA, "Marque a coluna do munic\xEDpio (se houver) para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "seg_roubo_em_residecia",
+        name: "Seguran\xE7a p\xFAblica do ES: Roubo em resid\xEAncia",
+        shortTitle: "Roubo em resid\xEAncia",
+        category: "Seguran\xE7a p\xFAblica",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto roubo-em-residecia)",
+        url: portalES("roubo-em-residecia"),
+        pagina: portalES("roubo-em-residecia"),
+        ckan: ckanES("roubo-em-residecia"),
+        format: "CSV",
+        description: "Ocorr\xEAncias de roubo em resid\xEAncia no ES.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Roubo em resid\xEAncia",
+        tags: ["roubo", "resid\xEAncia", "seguran\xE7a p\xFAblica"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_SEGURANCA, SENSIVEL_SEGURANCA, 'O endere\xE7o do conjunto tem "residecia" (sem o n), como informado; se a confer\xEAncia n\xE3o o encontrar, confira a grafia no portal.', "Marque a coluna do munic\xEDpio (se houver) para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "seg_roubo_em_comercio",
+        name: "Seguran\xE7a p\xFAblica do ES: Roubo em com\xE9rcio",
+        shortTitle: "Roubo em com\xE9rcio",
+        category: "Seguran\xE7a p\xFAblica",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto roubo-em-comercio)",
+        url: portalES("roubo-em-comercio"),
+        pagina: portalES("roubo-em-comercio"),
+        ckan: ckanES("roubo-em-comercio"),
+        format: "CSV",
+        description: "Ocorr\xEAncias de roubo em estabelecimentos comerciais no ES.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Roubo em com\xE9rcio",
+        tags: ["roubo", "com\xE9rcio", "seguran\xE7a p\xFAblica"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_SEGURANCA, SENSIVEL_SEGURANCA, "Marque a coluna do munic\xEDpio (se houver) para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "seg_roubo_em_transporte_coletivo",
+        name: "Seguran\xE7a p\xFAblica do ES: Roubo em transporte coletivo",
+        shortTitle: "Roubo em transporte coletivo",
+        category: "Seguran\xE7a p\xFAblica",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto roubo-em-transporte-coletivo)",
+        url: portalES("roubo-em-transporte-coletivo"),
+        pagina: portalES("roubo-em-transporte-coletivo"),
+        ckan: ckanES("roubo-em-transporte-coletivo"),
+        format: "CSV",
+        description: "Ocorr\xEAncias de roubo em \xF4nibus e outros transportes coletivos no ES.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Roubo em transporte coletivo",
+        tags: ["roubo", "\xF4nibus", "transporte coletivo", "seguran\xE7a p\xFAblica"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_SEGURANCA, SENSIVEL_SEGURANCA, "Marque a coluna do munic\xEDpio (se houver) para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "seg_roubo_bicicleta",
+        name: "Seguran\xE7a p\xFAblica do ES: Roubo de bicicleta",
+        shortTitle: "Roubo de bicicleta",
+        category: "Seguran\xE7a p\xFAblica",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto roubo-bicicleta)",
+        url: portalES("roubo-bicicleta"),
+        pagina: portalES("roubo-bicicleta"),
+        ckan: ckanES("roubo-bicicleta"),
+        format: "CSV",
+        description: "Ocorr\xEAncias de roubo de bicicleta no ES.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Roubo de bicicleta",
+        tags: ["roubo", "bicicleta", "seguran\xE7a p\xFAblica"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_SEGURANCA, SENSIVEL_SEGURANCA, "Marque a coluna do munic\xEDpio (se houver) para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "seg_furto_a_pessoa",
+        name: "Seguran\xE7a p\xFAblica do ES: Furto a pessoa",
+        shortTitle: "Furto a pessoa",
+        category: "Seguran\xE7a p\xFAblica",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto furto-a-pessoa)",
+        url: portalES("furto-a-pessoa"),
+        pagina: portalES("furto-a-pessoa"),
+        ckan: ckanES("furto-a-pessoa"),
+        format: "CSV",
+        description: "Ocorr\xEAncias de furto a pessoa no ES.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Furto a pessoa",
+        tags: ["furto", "pessoa", "seguran\xE7a p\xFAblica"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_SEGURANCA, SENSIVEL_SEGURANCA, "Marque a coluna do munic\xEDpio (se houver) para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "seg_furto_em_residencia",
+        name: "Seguran\xE7a p\xFAblica do ES: Furto em resid\xEAncia",
+        shortTitle: "Furto em resid\xEAncia",
+        category: "Seguran\xE7a p\xFAblica",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto furto-em-residencia)",
+        url: portalES("furto-em-residencia"),
+        pagina: portalES("furto-em-residencia"),
+        ckan: ckanES("furto-em-residencia"),
+        format: "CSV",
+        description: "Ocorr\xEAncias de furto em resid\xEAncia no ES.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Furto em resid\xEAncia",
+        tags: ["furto", "resid\xEAncia", "seguran\xE7a p\xFAblica"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_SEGURANCA, SENSIVEL_SEGURANCA, "Marque a coluna do munic\xEDpio (se houver) para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "seg_furto_em_comercio",
+        name: "Seguran\xE7a p\xFAblica do ES: Furto em com\xE9rcio",
+        shortTitle: "Furto em com\xE9rcio",
+        category: "Seguran\xE7a p\xFAblica",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto furto-em-comercio)",
+        url: portalES("furto-em-comercio"),
+        pagina: portalES("furto-em-comercio"),
+        ckan: ckanES("furto-em-comercio"),
+        format: "CSV",
+        description: "Ocorr\xEAncias de furto em estabelecimentos comerciais no ES.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Furto em com\xE9rcio",
+        tags: ["furto", "com\xE9rcio", "seguran\xE7a p\xFAblica"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_SEGURANCA, SENSIVEL_SEGURANCA, "Marque a coluna do munic\xEDpio (se houver) para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "seg_furto_veiculo",
+        name: "Seguran\xE7a p\xFAblica do ES: Furto de ve\xEDculo",
+        shortTitle: "Furto de ve\xEDculo",
+        category: "Seguran\xE7a p\xFAblica",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto furto-veiculo)",
+        url: portalES("furto-veiculo"),
+        pagina: portalES("furto-veiculo"),
+        ckan: ckanES("furto-veiculo"),
+        format: "CSV",
+        description: "Ocorr\xEAncias de furto de ve\xEDculos no ES.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Furto de ve\xEDculo",
+        tags: ["furto", "ve\xEDculos", "seguran\xE7a p\xFAblica"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_SEGURANCA, SENSIVEL_SEGURANCA, "Marque a coluna do munic\xEDpio (se houver) para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      // ── Obras federais ──
+      {
+        id: "obrasgov_projetos",
+        name: "Obrasgov.br: API de projetos de investimento e obras federais",
+        shortTitle: "Obras federais (Obrasgov.br)",
+        category: "Gest\xE3o e Metas",
+        sphere: "federal",
+        source: "Minist\xE9rio da Gest\xE3o e da Inova\xE7\xE3o: Obrasgov.br",
+        url: "https://api.obrasgov.gestao.gov.br/obrasgov/api/swagger-ui/index.html",
+        pagina: "https://api.obrasgov.gestao.gov.br/obrasgov/api/swagger-ui/index.html",
+        format: "API",
+        description: "Cadastro nacional de projetos de investimento e obras com recursos federais: situa\xE7\xE3o, executor, valores e localiza\xE7\xE3o (\xE9 poss\xEDvel filtrar pelo ES).",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "weekly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Obras federais",
+        tags: ["obras", "investimento", "federal", "projetos"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: ["Indicado pela reda\xE7\xE3o (out/2026), ainda n\xE3o conferido.", "A consulta de projetos costuma devolver os resultados em p\xE1ginas: a automa\xE7\xE3o ainda n\xE3o percorre p\xE1ginas. Confira na documenta\xE7\xE3o (Swagger) os par\xE2metros de UF e de p\xE1gina; d\xE1 para acrescentar a leitura por p\xE1ginas, se for \xFAtil."]
+      },
+      // ── Comércio exterior: acompanhamento antes do fechamento mensal (lista da redação, out/2026) ──
+      {
+        id: "mdic_balanca_semanal",
+        name: "MDIC: balan\xE7a comercial preliminar (dados semanais e m\xE9dias di\xE1rias do m\xEAs em curso)",
+        shortTitle: "Balan\xE7a comercial semanal (MDIC)",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "MDIC / SECEX: balan\xE7a comercial preliminar",
+        url: "https://balanca.economia.gov.br/balanca/SH/TOTAL.xlsx",
+        pagina: "https://balanca.economia.gov.br/balanca/pg_principal_bc/principais_resultados.html",
+        format: "XLSX",
+        description: "Planilha regravada toda segunda-feira (por volta das 15h) com o acumulado do m\xEAs em curso, m\xE9dias di\xE1rias e varia\xE7\xE3o por setor.",
+        columnsPreview: [],
+        yearsPreview: "M\xEAs em curso",
+        recommendedSchedule: "weekly",
+        recommendedScheduleDesc: "Semanal, segunda-feira \xE0s 16h",
+        suggestedName: "Balan\xE7a comercial semanal",
+        tags: ["balan\xE7a comercial", "semanal", "preliminar", "exporta\xE7\xF5es", "importa\xE7\xF5es"],
+        fonteSugerida: { url: "https://balanca.economia.gov.br/balanca/SH/TOTAL.xlsx", formato: "xlsx", agenda: { frequencia: "semanal", dia_da_semana: 1, hora: "16:00" } },
+        importavelNoApp: !1,
+        avisos: [ORIGEM_TEMPO_REAL, "Dado do Brasil, n\xE3o do ES: a pr\xE9via semanal n\xE3o tem recorte por estado. O dado do ES s\xF3 vem com o fechamento mensal (Comex Stat).", "O layout da planilha (aba e linha do cabe\xE7alho) precisa ser conferido: mande as primeiras linhas que eu configuro.", CERT_COMEX]
+      },
+      {
+        id: "bcb_cambio_exportacoes",
+        name: "Banco Central: c\xE2mbio contratado, exporta\xE7\xF5es",
+        shortTitle: "C\xE2mbio contratado: exporta\xE7\xF5es (BC)",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "Banco Central do Brasil (SGS, s\xE9rie 22707)",
+        url: "https://api.bcb.gov.br/dados/serie/bcdata.sgs.22707/dados/ultimos/24?formato=json",
+        pagina: "https://www3.bcb.gov.br/sgspub/",
+        format: "JSON",
+        description: "Movimento de c\xE2mbio contratado comercial de exporta\xE7\xF5es: o dinheiro das vendas externas entrando no pa\xEDs.",
+        columnsPreview: ["data", "valor"],
+        yearsPreview: "24 registros mais recentes",
+        recommendedSchedule: "weekly",
+        recommendedScheduleDesc: "Semanal (o BC atualiza \xE0s quartas-feiras)",
+        suggestedName: "C\xE2mbio contratado: exporta\xE7\xF5es (BC)",
+        tags: ["c\xE2mbio", "exporta\xE7\xF5es", "importa\xE7\xF5es", "banco central", "balan\xE7a comercial"],
+        fonteSugerida: SERIE_BCB(22707),
+        avisos: [ORIGEM_TEMPO_REAL, "Confira o nome e a periodicidade da s\xE9rie 22707 no SGS do Banco Central antes de usar: o n\xFAmero veio da lista. Dado do Brasil, n\xE3o do ES."]
+      },
+      {
+        id: "bcb_cambio_importacoes",
+        name: "Banco Central: c\xE2mbio contratado, importa\xE7\xF5es",
+        shortTitle: "C\xE2mbio contratado: importa\xE7\xF5es (BC)",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "Banco Central do Brasil (SGS, s\xE9rie 22709)",
+        url: "https://api.bcb.gov.br/dados/serie/bcdata.sgs.22709/dados/ultimos/24?formato=json",
+        pagina: "https://www3.bcb.gov.br/sgspub/",
+        format: "JSON",
+        description: "Movimento de c\xE2mbio contratado comercial de importa\xE7\xF5es.",
+        columnsPreview: ["data", "valor"],
+        yearsPreview: "24 registros mais recentes",
+        recommendedSchedule: "weekly",
+        recommendedScheduleDesc: "Semanal (o BC atualiza \xE0s quartas-feiras)",
+        suggestedName: "C\xE2mbio contratado: importa\xE7\xF5es (BC)",
+        tags: ["c\xE2mbio", "exporta\xE7\xF5es", "importa\xE7\xF5es", "banco central", "balan\xE7a comercial"],
+        fonteSugerida: SERIE_BCB(22709),
+        avisos: [ORIGEM_TEMPO_REAL, "Confira o nome e a periodicidade da s\xE9rie 22709 no SGS do Banco Central antes de usar: o n\xFAmero veio da lista. Dado do Brasil, n\xE3o do ES."]
+      },
+      {
+        id: "bcb_saldo_comercial",
+        name: "Banco Central: saldo da balan\xE7a comercial",
+        shortTitle: "Saldo da balan\xE7a comercial (BC)",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "Banco Central do Brasil (SGS, s\xE9rie 22704)",
+        url: "https://api.bcb.gov.br/dados/serie/bcdata.sgs.22704/dados/ultimos/24?formato=json",
+        pagina: "https://www3.bcb.gov.br/sgspub/",
+        format: "JSON",
+        description: "Saldo da balan\xE7a comercial segundo a s\xE9rie do Banco Central.",
+        columnsPreview: ["data", "valor"],
+        yearsPreview: "24 registros mais recentes",
+        recommendedSchedule: "weekly",
+        recommendedScheduleDesc: "Semanal (o BC atualiza \xE0s quartas-feiras)",
+        suggestedName: "Saldo da balan\xE7a comercial (BC)",
+        tags: ["c\xE2mbio", "exporta\xE7\xF5es", "importa\xE7\xF5es", "banco central", "balan\xE7a comercial"],
+        fonteSugerida: SERIE_BCB(22704),
+        avisos: [ORIGEM_TEMPO_REAL, "Confira o nome e a periodicidade da s\xE9rie 22704 no SGS do Banco Central antes de usar: o n\xFAmero veio da lista. Dado do Brasil, n\xE3o do ES."]
+      },
+      {
+        id: "mdic_balanca_paginas",
+        name: "MDIC: p\xE1ginas dos resultados preliminares da balan\xE7a (semana e m\xEAs em curso)",
+        shortTitle: "Resultados preliminares (MDIC)",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "MDIC / SECEX",
+        url: "https://balanca.economia.gov.br/balanca/pg_principal_bc/principais_resultados.html",
+        pagina: "https://balanca.economia.gov.br/balanca/pg_principal_bc/principais_resultados.html",
+        format: "API",
+        description: "P\xE1ginas com os resultados preliminares e por setor/produto da semana.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "weekly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Resultados preliminares (MDIC)",
+        tags: ["balan\xE7a comercial", "preliminar"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_TEMPO_REAL, "P\xE1ginas da web (sem arquivo de dados): para a coleta autom\xE1tica, use a planilha semanal."]
+      },
+      {
+        id: "comex_sinal_atualizacao",
+        name: "Comex Stat: data da \xFAltima atualiza\xE7\xE3o (\xFAltimo m\xEAs fechado)",
+        shortTitle: "Atualiza\xE7\xE3o do Comex Stat",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "MDIC / SECEX: Comex Stat",
+        url: "https://api-comexstat.mdic.gov.br/general/dates/updated",
+        pagina: "https://api-comexstat.mdic.gov.br/general/dates/updated",
+        format: "API",
+        description: "Endere\xE7o leve que informa o \xFAltimo m\xEAs fechado na base do Comex Stat.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "weekly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Atualiza\xE7\xE3o do Comex Stat",
+        tags: ["comex", "atualiza\xE7\xE3o"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_TEMPO_REAL, "J\xE1 usado pelas fontes do Comex Stat do cat\xE1logo como sinal de atualiza\xE7\xE3o: elas verificam todo dia e s\xF3 baixam quando o m\xEAs muda."]
+      },
+      {
+        id: "pucomex",
+        name: "Portal \xDAnico Siscomex (PUCOMEX): API operacional de despachos (DU-E, DUIMP, carga)",
+        shortTitle: "Portal \xDAnico Siscomex",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "Receita Federal / SECEX",
+        url: "https://docs.portalunico.siscomex.gov.br/",
+        pagina: "https://docs.portalunico.siscomex.gov.br/",
+        format: "API",
+        description: "API transacional dos despachos aduaneiros em tempo real.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "weekly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Portal \xDAnico Siscomex",
+        tags: ["siscomex", "despachos", "du-e", "duimp"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_TEMPO_REAL, "N\xE3o \xE9 dado aberto: exige certificado digital ICP-Brasil (e-CPF/e-CNPJ) de quem opera com\xE9rcio exterior. N\xE3o pode ser usada pela automa\xE7\xE3o."]
+      },
+      {
+        id: "vports_lineup",
+        name: "Vports (Autoridade Portu\xE1ria do ES): line-up e atraca\xE7\xF5es de navios",
+        shortTitle: "Line-up de navios (Vports)",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "Vports",
+        url: "https://vports.com.br/",
+        pagina: "https://vports.com.br/",
+        format: "API",
+        description: "Navios atracados, fundeados e programados nos portos capixabas, com tipo de carga e tonelagem prevista.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "weekly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Line-up de navios (Vports)",
+        tags: ["portos", "navios", "line-up", "vit\xF3ria"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_TEMPO_REAL, "P\xE1gina da web (Opera\xE7\xF5es > Programa\xE7\xE3o de navios), sem arquivo de dados aberto conhecido."]
+      },
+      {
+        id: "antaq_estatistico",
+        name: "ANTAQ: Estat\xEDstico Aquavi\xE1rio (cargas e atraca\xE7\xF5es por porto)",
+        shortTitle: "Estat\xEDstico Aquavi\xE1rio (ANTAQ)",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "ANTAQ",
+        url: "https://web3.antaq.gov.br/ea/sense/index.html",
+        pagina: "https://web3.antaq.gov.br/ea/sense/index.html",
+        format: "API",
+        description: "Movimenta\xE7\xE3o de cargas e atraca\xE7\xF5es por instala\xE7\xE3o portu\xE1ria e mercadoria, com cerca de 30 dias de defasagem.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "weekly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Estat\xEDstico Aquavi\xE1rio (ANTAQ)",
+        tags: ["antaq", "portos", "cargas", "atraca\xE7\xF5es"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_TEMPO_REAL, "Painel. Os microdados anuais (Carga e Atraca\xE7\xE3o) podem virar fonte: procure os arquivos no dados.gov.br (antaq) e mande o endere\xE7o."]
+      },
+      // ── Comércio exterior: Comex Stat (lista enviada pela redação, out/2026) ──
+      {
+        id: "comex_exp_municipios_es",
+        name: "Comex Stat: Exporta\xE7\xF5es dos munic\xEDpios do ES por produto (SH4) e pa\xEDs",
+        shortTitle: "Exporta\xE7\xF5es dos munic\xEDpios do ES (Comex)",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "MDIC / SECEX: Comex Stat",
+        url: "https://balanca.economia.gov.br/balanca/bd/comexstat-bd/mun/EXP_{{ANO}}_MUN.csv",
+        pagina: "https://comexstat.mdic.gov.br/pt/dados-abertos",
+        format: "CSV",
+        description: "Exporta\xE7\xF5es das empresas de cada munic\xEDpio capixaba, por produto e pa\xEDs de destino, m\xEAs a m\xEAs.",
+        columnsPreview: ["CO_ANO", "CO_MES", "SH4", "CO_PAIS", "SG_UF_MUN", "CO_MUN", "KG_LIQUIDO", "VL_FOB"],
+        yearsPreview: "2015 em diante",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Verifica\xE7\xE3o di\xE1ria pelo sinal de atualiza\xE7\xE3o (o MDIC libera o m\xEAs na primeira semana)",
+        suggestedName: "Exporta\xE7\xF5es dos munic\xEDpios do ES (Comex)",
+        tags: ["exporta\xE7\xF5es", "munic\xEDpios", "com\xE9rcio exterior", "comex"],
+        fonteSugerida: { url: "https://balanca.economia.gov.br/balanca/bd/comexstat-bd/mun/EXP_{{ANO}}_MUN.csv", anos: { de: 2015 }, formato: "csv", agenda: AGENDA_COMEX, sinal_de_novidade: SINAL_COMEX, colunas_tempo: { ano: "ano", mes: "mes" }, tratamento: { filtrar: { SG_UF_MUN: "ES" }, renomear: { CO_ANO: "ano", CO_MES: "mes", SH4: "sh4", CO_PAIS: "cod_pais", CO_MUN: "cod_mun_comex", KG_LIQUIDO: "kg_liquido", VL_FOB: "valor_fob_usd" }, inteiros: ["ano", "mes"], numeros: ["kg_liquido", "valor_fob_usd"], tipos: { sh4: "category", cod_pais: "category", cod_mun_comex: "category" }, agrupar: { por: ["ano", "mes", "cod_mun_comex", "sh4", "cod_pais"], somar: ["valor_fob_usd", "kg_liquido"] } } },
+        importavelNoApp: !1,
+        avisos: [ORIGEM_COMEX, "Arquivo do Brasil inteiro, um por ano (dezenas de MB): a automa\xE7\xE3o filtra s\xF3 o ES (SG_UF_MUN = ES) e soma por m\xEAs, munic\xEDpio, produto (SH4) e pa\xEDs. Valores em d\xF3lares (US$ FOB) e quilos.", "O munic\xEDpio \xE9 o domic\xEDlio fiscal da empresa, n\xE3o onde o produto foi feito. O c\xF3digo de munic\xEDpio do Comex (CO_MUN) pode n\xE3o ser o do IBGE: use a tabela de munic\xEDpios do Comex (CO_MUN_GEO) para a correspond\xEAncia.", CERT_COMEX]
+      },
+      {
+        id: "comex_imp_municipios_es",
+        name: "Comex Stat: Importa\xE7\xF5es dos munic\xEDpios do ES por produto (SH4) e pa\xEDs",
+        shortTitle: "Importa\xE7\xF5es dos munic\xEDpios do ES (Comex)",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "MDIC / SECEX: Comex Stat",
+        url: "https://balanca.economia.gov.br/balanca/bd/comexstat-bd/mun/IMP_{{ANO}}_MUN.csv",
+        pagina: "https://comexstat.mdic.gov.br/pt/dados-abertos",
+        format: "CSV",
+        description: "Importa\xE7\xF5es das empresas de cada munic\xEDpio capixaba, por produto e pa\xEDs de origem, m\xEAs a m\xEAs.",
+        columnsPreview: ["CO_ANO", "CO_MES", "SH4", "CO_PAIS", "SG_UF_MUN", "CO_MUN", "KG_LIQUIDO", "VL_FOB"],
+        yearsPreview: "2015 em diante",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Verifica\xE7\xE3o di\xE1ria pelo sinal de atualiza\xE7\xE3o (o MDIC libera o m\xEAs na primeira semana)",
+        suggestedName: "Importa\xE7\xF5es dos munic\xEDpios do ES (Comex)",
+        tags: ["importa\xE7\xF5es", "munic\xEDpios", "com\xE9rcio exterior", "comex"],
+        fonteSugerida: { url: "https://balanca.economia.gov.br/balanca/bd/comexstat-bd/mun/IMP_{{ANO}}_MUN.csv", anos: { de: 2015 }, formato: "csv", agenda: AGENDA_COMEX, sinal_de_novidade: SINAL_COMEX, colunas_tempo: { ano: "ano", mes: "mes" }, tratamento: { filtrar: { SG_UF_MUN: "ES" }, renomear: { CO_ANO: "ano", CO_MES: "mes", SH4: "sh4", CO_PAIS: "cod_pais", CO_MUN: "cod_mun_comex", KG_LIQUIDO: "kg_liquido", VL_FOB: "valor_fob_usd" }, inteiros: ["ano", "mes"], numeros: ["kg_liquido", "valor_fob_usd"], tipos: { sh4: "category", cod_pais: "category", cod_mun_comex: "category" }, agrupar: { por: ["ano", "mes", "cod_mun_comex", "sh4", "cod_pais"], somar: ["valor_fob_usd", "kg_liquido"] } } },
+        importavelNoApp: !1,
+        avisos: [ORIGEM_COMEX, "Arquivo do Brasil inteiro, um por ano (dezenas de MB): a automa\xE7\xE3o filtra s\xF3 o ES (SG_UF_MUN = ES) e soma por m\xEAs, munic\xEDpio, produto (SH4) e pa\xEDs. Valores em d\xF3lares (US$ FOB) e quilos.", "O munic\xEDpio \xE9 o domic\xEDlio fiscal da empresa, n\xE3o onde o produto foi feito. O c\xF3digo de munic\xEDpio do Comex (CO_MUN) pode n\xE3o ser o do IBGE: use a tabela de munic\xEDpios do Comex (CO_MUN_GEO) para a correspond\xEAncia.", CERT_COMEX]
+      },
+      {
+        id: "comex_exp_ncm_es",
+        name: "Comex Stat: Exporta\xE7\xF5es do ES por produto (NCM), pa\xEDs, via e porto",
+        shortTitle: "Exporta\xE7\xF5es do ES por produto e porto (Comex)",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "MDIC / SECEX: Comex Stat",
+        url: "https://balanca.economia.gov.br/balanca/bd/comexstat-bd/ncm/EXP_{{ANO}}.csv",
+        pagina: "https://comexstat.mdic.gov.br/pt/dados-abertos",
+        format: "CSV",
+        description: "Exporta\xE7\xF5es do Esp\xEDrito Santo por produto detalhado (NCM 8 d\xEDgitos), pa\xEDs de destino, via de transporte e porto/alf\xE2ndega.",
+        columnsPreview: ["CO_ANO", "CO_MES", "CO_NCM", "CO_UNID", "CO_PAIS", "SG_UF_NCM", "CO_VIA", "CO_URF", "QT_ESTAT", "KG_LIQUIDO", "VL_FOB"],
+        yearsPreview: "2015 em diante",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Verifica\xE7\xE3o di\xE1ria pelo sinal de atualiza\xE7\xE3o (o MDIC libera o m\xEAs na primeira semana)",
+        suggestedName: "Exporta\xE7\xF5es do ES por produto e porto (Comex)",
+        tags: ["exporta\xE7\xF5es", "ncm", "portos", "caf\xE9", "min\xE9rio", "rochas", "celulose"],
+        fonteSugerida: { url: "https://balanca.economia.gov.br/balanca/bd/comexstat-bd/ncm/EXP_{{ANO}}.csv", anos: { de: 2015 }, formato: "csv", agenda: AGENDA_COMEX, sinal_de_novidade: SINAL_COMEX, colunas_tempo: { ano: "ano", mes: "mes" }, tratamento: { filtrar: { SG_UF_NCM: "ES" }, renomear: { CO_ANO: "ano", CO_MES: "mes", CO_NCM: "ncm", CO_PAIS: "cod_pais", CO_VIA: "cod_via", CO_URF: "cod_urf", KG_LIQUIDO: "kg_liquido", VL_FOB: "valor_fob_usd" }, inteiros: ["ano", "mes"], numeros: ["kg_liquido", "valor_fob_usd"], tipos: { ncm: "category", cod_pais: "category", cod_via: "category", cod_urf: "category" }, agrupar: { por: ["ano", "mes", "ncm", "cod_pais", "cod_via", "cod_urf"], somar: ["valor_fob_usd", "kg_liquido"] } } },
+        importavelNoApp: !1,
+        avisos: [ORIGEM_COMEX, "Arquivo do Brasil inteiro, um por ano (centenas de MB): a automa\xE7\xE3o filtra s\xF3 o ES (SG_UF_NCM = ES) e soma por m\xEAs, produto (NCM), pa\xEDs, via de transporte e porto/alf\xE2ndega (URF). Valores em US$ FOB e quilos. A primeira carga pode levar mais de uma execu\xE7\xE3o.", CERT_COMEX]
+      },
+      {
+        id: "comex_imp_ncm_es",
+        name: "Comex Stat: Importa\xE7\xF5es do ES por produto (NCM), pa\xEDs, via e porto",
+        shortTitle: "Importa\xE7\xF5es do ES por produto e porto (Comex)",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "MDIC / SECEX: Comex Stat",
+        url: "https://balanca.economia.gov.br/balanca/bd/comexstat-bd/ncm/IMP_{{ANO}}.csv",
+        pagina: "https://comexstat.mdic.gov.br/pt/dados-abertos",
+        format: "CSV",
+        description: "Importa\xE7\xF5es do Esp\xEDrito Santo por produto detalhado (NCM 8 d\xEDgitos), pa\xEDs de origem, via de transporte e porto/alf\xE2ndega.",
+        columnsPreview: ["CO_ANO", "CO_MES", "CO_NCM", "CO_UNID", "CO_PAIS", "SG_UF_NCM", "CO_VIA", "CO_URF", "QT_ESTAT", "KG_LIQUIDO", "VL_FOB", "VL_FRETE", "VL_SEGURO"],
+        yearsPreview: "2015 em diante",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Verifica\xE7\xE3o di\xE1ria pelo sinal de atualiza\xE7\xE3o (o MDIC libera o m\xEAs na primeira semana)",
+        suggestedName: "Importa\xE7\xF5es do ES por produto e porto (Comex)",
+        tags: ["importa\xE7\xF5es", "ncm", "portos"],
+        fonteSugerida: { url: "https://balanca.economia.gov.br/balanca/bd/comexstat-bd/ncm/IMP_{{ANO}}.csv", anos: { de: 2015 }, formato: "csv", agenda: AGENDA_COMEX, sinal_de_novidade: SINAL_COMEX, colunas_tempo: { ano: "ano", mes: "mes" }, tratamento: { filtrar: { SG_UF_NCM: "ES" }, renomear: { CO_ANO: "ano", CO_MES: "mes", CO_NCM: "ncm", CO_PAIS: "cod_pais", CO_VIA: "cod_via", CO_URF: "cod_urf", KG_LIQUIDO: "kg_liquido", VL_FOB: "valor_fob_usd" }, inteiros: ["ano", "mes"], numeros: ["kg_liquido", "valor_fob_usd"], tipos: { ncm: "category", cod_pais: "category", cod_via: "category", cod_urf: "category" }, agrupar: { por: ["ano", "mes", "ncm", "cod_pais", "cod_via", "cod_urf"], somar: ["valor_fob_usd", "kg_liquido"] } } },
+        importavelNoApp: !1,
+        avisos: [ORIGEM_COMEX, "Arquivo do Brasil inteiro, um por ano (centenas de MB): a automa\xE7\xE3o filtra s\xF3 o ES (SG_UF_NCM = ES) e soma por m\xEAs, produto (NCM), pa\xEDs, via de transporte e porto/alf\xE2ndega (URF). Valores em US$ FOB e quilos. A primeira carga pode levar mais de uma execu\xE7\xE3o.", CERT_COMEX]
+      },
+      {
+        id: "comex_tabela_pais",
+        name: "Comex Stat: tabela de c\xF3digos PAIS",
+        shortTitle: "Pa\xEDses (c\xF3digos do Comex)",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "MDIC / SECEX: Comex Stat",
+        url: "https://balanca.economia.gov.br/balanca/bd/tabelas/PAIS.csv",
+        pagina: "https://comexstat.mdic.gov.br/pt/dados-abertos",
+        format: "CSV",
+        description: "C\xF3digos e nomes dos pa\xEDses usados pelo Comex Stat.",
+        columnsPreview: ["CO_PAIS", "NO_PAIS"],
+        yearsPreview: "Tabela vigente",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "Pa\xEDses (c\xF3digos do Comex)",
+        tags: ["comex", "c\xF3digos", "tabela auxiliar"],
+        fonteSugerida: { url: "https://balanca.economia.gov.br/balanca/bd/tabelas/PAIS.csv", formato: "csv", agenda: { frequencia: "anual", dia_do_mes: 15, mes: 2, hora: "06:00" } },
+        importavelNoApp: !0,
+        avisos: [ORIGEM_COMEX, "Tabela de refer\xEAncia (dicion\xE1rio), n\xE3o uma s\xE9rie: serve para trocar c\xF3digos por nomes. Colunas a conferir.", CERT_COMEX]
+      },
+      {
+        id: "comex_tabela_uf_mun",
+        name: "Comex Stat: tabela de c\xF3digos UF_MUN",
+        shortTitle: "Munic\xEDpios (c\xF3digos do Comex)",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "MDIC / SECEX: Comex Stat",
+        url: "https://balanca.economia.gov.br/balanca/bd/tabelas/UF_MUN.csv",
+        pagina: "https://comexstat.mdic.gov.br/pt/dados-abertos",
+        format: "CSV",
+        description: "Correspond\xEAncia entre o c\xF3digo de munic\xEDpio do Comex (CO_MUN_GEO) e o nome; essencial para ligar ao IBGE.",
+        columnsPreview: ["CO_MUN_GEO", "NO_MUN", "SG_UF"],
+        yearsPreview: "Tabela vigente",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "Munic\xEDpios (c\xF3digos do Comex)",
+        tags: ["comex", "c\xF3digos", "tabela auxiliar"],
+        fonteSugerida: { url: "https://balanca.economia.gov.br/balanca/bd/tabelas/UF_MUN.csv", formato: "csv", agenda: { frequencia: "anual", dia_do_mes: 15, mes: 2, hora: "06:00" } },
+        importavelNoApp: !0,
+        avisos: [ORIGEM_COMEX, "Tabela de refer\xEAncia (dicion\xE1rio), n\xE3o uma s\xE9rie: serve para trocar c\xF3digos por nomes. Colunas a conferir.", CERT_COMEX]
+      },
+      {
+        id: "comex_tabela_ncm_sh",
+        name: "Comex Stat: tabela de c\xF3digos NCM_SH",
+        shortTitle: "Produtos SH2, SH4 e SH6 (c\xF3digos do Comex)",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "MDIC / SECEX: Comex Stat",
+        url: "https://balanca.economia.gov.br/balanca/bd/tabelas/NCM_SH.csv",
+        pagina: "https://comexstat.mdic.gov.br/pt/dados-abertos",
+        format: "CSV",
+        description: "Descri\xE7\xE3o dos cap\xEDtulos (SH2), posi\xE7\xF5es (SH4) e subposi\xE7\xF5es (SH6) do Sistema Harmonizado.",
+        columnsPreview: ["CO_SH6", "NO_SH6_POR", "CO_SH4", "NO_SH4_POR", "CO_SH2", "NO_SH2_POR"],
+        yearsPreview: "Tabela vigente",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "Produtos SH2, SH4 e SH6 (c\xF3digos do Comex)",
+        tags: ["comex", "c\xF3digos", "tabela auxiliar"],
+        fonteSugerida: { url: "https://balanca.economia.gov.br/balanca/bd/tabelas/NCM_SH.csv", formato: "csv", agenda: { frequencia: "anual", dia_do_mes: 15, mes: 2, hora: "06:00" } },
+        importavelNoApp: !0,
+        avisos: [ORIGEM_COMEX, "Tabela de refer\xEAncia (dicion\xE1rio), n\xE3o uma s\xE9rie: serve para trocar c\xF3digos por nomes. Colunas a conferir.", CERT_COMEX]
+      },
+      {
+        id: "comex_tabela_urf",
+        name: "Comex Stat: tabela de c\xF3digos URF",
+        shortTitle: "Portos e alf\xE2ndegas, URF (c\xF3digos do Comex)",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "MDIC / SECEX: Comex Stat",
+        url: "https://balanca.economia.gov.br/balanca/bd/tabelas/URF.csv",
+        pagina: "https://comexstat.mdic.gov.br/pt/dados-abertos",
+        format: "CSV",
+        description: "Unidades da Receita Federal (portos e alf\xE2ndegas), como Vit\xF3ria, Tubar\xE3o e Barra do Riacho.",
+        columnsPreview: ["CO_URF", "NO_URF"],
+        yearsPreview: "Tabela vigente",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "Portos e alf\xE2ndegas, URF (c\xF3digos do Comex)",
+        tags: ["comex", "c\xF3digos", "tabela auxiliar"],
+        fonteSugerida: { url: "https://balanca.economia.gov.br/balanca/bd/tabelas/URF.csv", formato: "csv", agenda: { frequencia: "anual", dia_do_mes: 15, mes: 2, hora: "06:00" } },
+        importavelNoApp: !0,
+        avisos: [ORIGEM_COMEX, "Tabela de refer\xEAncia (dicion\xE1rio), n\xE3o uma s\xE9rie: serve para trocar c\xF3digos por nomes. Colunas a conferir.", CERT_COMEX]
+      },
+      {
+        id: "comex_api",
+        name: "Comex Stat: API oficial (consultas por POST)",
+        shortTitle: "API do Comex Stat",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "MDIC / SECEX: Comex Stat",
+        url: "https://api-comexstat.mdic.gov.br/docs",
+        pagina: "https://api-comexstat.mdic.gov.br/docs",
+        format: "API",
+        description: "Consultas por estado, munic\xEDpio, produto, pa\xEDs, via e porto; a \xFAltima data atualizada fica em /general/dates/updated.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "API do Comex Stat",
+        tags: ["api", "comex"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_COMEX, "As consultas de dados usam POST (pacote JSON com per\xEDodo, filtros e detalhamentos); o app e a automa\xE7\xE3o usam os arquivos CSV anuais, que trazem os mesmos dados."]
+      },
+      {
+        id: "comex_painel",
+        name: "Comex Stat: painel web e dados abertos",
+        shortTitle: "Painel Comex Stat",
+        category: "Com\xE9rcio exterior",
+        sphere: "federal",
+        source: "MDIC / SECEX: Comex Stat",
+        url: "https://comexstat.mdic.gov.br",
+        pagina: "https://comexstat.mdic.gov.br/pt/dados-abertos",
+        format: "API",
+        description: "Consulta interativa e p\xE1gina dos arquivos de dados abertos (inclui a planilha TABELAS_AUXILIARES.xlsx com todos os c\xF3digos).",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "Painel Comex Stat",
+        tags: ["comex", "painel"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_COMEX]
+      },
+      // ── Educação (lista enviada pela redação, out/2026) ──
+      {
+        id: "fed_ibge_ideb_municipios",
+        name: "IDEB dos munic\xEDpios do ES (anos iniciais e finais, rede p\xFAblica), pela API do IBGE",
+        shortTitle: "IDEB dos munic\xEDpios (IBGE/INEP)",
+        category: "Educa\xE7\xE3o",
+        sphere: "federal",
+        source: "INEP, via API de Pesquisas do IBGE (IBGE Cidades@)",
+        url: "https://servicodados.ibge.gov.br/api/v1/pesquisas/indicadores/30255|30256/resultados/{{MUNICIPIOS_ES}}",
+        pagina: "https://servicodados.ibge.gov.br/api/docs/pesquisas",
+        format: "JSON",
+        description: "S\xE9rie hist\xF3rica do IDEB (anos iniciais e anos finais do ensino fundamental, rede p\xFAblica) dos 78 munic\xEDpios capixabas.",
+        columnsPreview: ["indicador", "cod_ibge", "municipio", "ano", "valor"],
+        yearsPreview: "S\xE9rie hist\xF3rica (IDEB a cada 2 anos)",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual (o IDEB sai a cada dois anos)",
+        suggestedName: "IDEB dos munic\xEDpios",
+        tags: ["ideb", "educa\xE7\xE3o", "inep", "munic\xEDpios", "ensino fundamental"],
+        importavelNoApp: !1,
+        avisos: [ORIGEM_EDU, "Indicadores 30255 (anos iniciais) e 30256 (anos finais), conforme a lista. {{MUNICIPIOS_ES}} \xE9 trocado pela automa\xE7\xE3o pelos c\xF3digos dos 78 munic\xEDpios; por isso, use como fonte autom\xE1tica (a importa\xE7\xE3o direta no app n\xE3o monta esse endere\xE7o).", "A resposta traz s\xF3 o c\xF3digo do munic\xEDpio: a automa\xE7\xE3o acrescenta o nome oficial pela lista do IBGE."]
+      },
+      {
+        id: "fed_pnad_analfabetismo_es",
+        name: "IBGE/PNAD Cont\xEDnua: Taxa de analfabetismo no ES (meta 9 do PNE)",
+        shortTitle: "Analfabetismo no ES (PNAD)",
+        category: "Educa\xE7\xE3o",
+        sphere: "federal",
+        source: "IBGE: PNAD Cont\xEDnua Educa\xE7\xE3o (SIDRA, tabela 7113)",
+        url: "https://servicodados.ibge.gov.br/api/v3/agregados/7113/periodos/-5/variaveis/10267?localidades=N3[32]",
+        pagina: "https://sidra.ibge.gov.br/tabela/7113",
+        format: "JSON",
+        description: "Taxa de analfabetismo das pessoas de 15 anos ou mais no Esp\xEDrito Santo, \xFAltimos 5 anos.",
+        columnsPreview: ["cod_ibge", "localidade", "variavel", "unidade", "ano", "valor"],
+        yearsPreview: "5 anos mais recentes",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "Analfabetismo no ES",
+        tags: ["analfabetismo", "pnad", "pne", "educa\xE7\xE3o"],
+        avisos: [ORIGEM_EDU, AGREGADOS, "Dado do Estado (PNAD Cont\xEDnua n\xE3o tem recorte por munic\xEDpio)."]
+      },
+      {
+        id: "fed_pnad_frequencia_escolar_es",
+        name: "IBGE/PNAD Cont\xEDnua: Taxa ajustada de frequ\xEAncia escolar l\xEDquida no ES (metas 1, 2 e 3 do PNE)",
+        shortTitle: "Frequ\xEAncia escolar l\xEDquida no ES (PNAD)",
+        category: "Educa\xE7\xE3o",
+        sphere: "federal",
+        source: "IBGE: PNAD Cont\xEDnua Educa\xE7\xE3o (SIDRA, tabela 7126)",
+        url: "https://servicodados.ibge.gov.br/api/v3/agregados/7126/periodos/-5/variaveis/10277?localidades=N3[32]",
+        pagina: "https://sidra.ibge.gov.br/tabela/7126",
+        format: "JSON",
+        description: "Taxa ajustada de frequ\xEAncia escolar l\xEDquida por etapa de ensino no Esp\xEDrito Santo, \xFAltimos 5 anos.",
+        columnsPreview: ["cod_ibge", "localidade", "variavel", "unidade", "ano", "valor"],
+        yearsPreview: "5 anos mais recentes",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "Frequ\xEAncia escolar no ES",
+        tags: ["frequ\xEAncia escolar", "pnad", "pne", "educa\xE7\xE3o"],
+        avisos: [ORIGEM_EDU, AGREGADOS, "Dado do Estado (PNAD Cont\xEDnua n\xE3o tem recorte por munic\xEDpio). A tabela pode ter classifica\xE7\xE3o por etapa de ensino: confira as colunas."]
+      },
+      {
+        id: "fed_ibge_indicadores_educacao",
+        name: "IBGE Cidades@: \xE1rvore de indicadores de educa\xE7\xE3o (matr\xEDculas, docentes, escolas, escolariza\xE7\xE3o)",
+        shortTitle: "Indicadores de educa\xE7\xE3o (IBGE Cidades)",
+        category: "Educa\xE7\xE3o",
+        sphere: "federal",
+        source: "IBGE: API de Pesquisas",
+        url: "https://servicodados.ibge.gov.br/api/v1/pesquisas/indicadores/29168",
+        pagina: "https://servicodados.ibge.gov.br/api/v1/pesquisas/indicadores/29168",
+        format: "API",
+        description: "Lista dos indicadores de educa\xE7\xE3o do IBGE Cidades, para escolher os c\xF3digos de outras fontes.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Indicadores de educa\xE7\xE3o (IBGE Cidades)",
+        tags: ["educa\xE7\xE3o", "matr\xEDculas", "docentes", "escolas"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_EDU, "Use os c\xF3digos de indicador desta \xE1rvore no mesmo formato do IDEB (\u2026/indicadores/C\xD3DIGO/resultados/{{MUNICIPIOS_ES}})."]
+      },
+      {
+        id: "inep_ideb_resultados",
+        name: "INEP: resultados do IDEB por escola e munic\xEDpio (planilhas, com metas)",
+        shortTitle: "IDEB por escola e metas (INEP)",
+        category: "Educa\xE7\xE3o",
+        sphere: "federal",
+        source: "INEP",
+        url: "https://www.gov.br/inep/pt-br/areas-de-atuacao/pesquisas-estatisticas-e-indicadores/ideb/resultados",
+        pagina: "https://www.gov.br/inep/pt-br/areas-de-atuacao/pesquisas-estatisticas-e-indicadores/ideb/resultados",
+        format: "API",
+        description: "Planilhas oficiais com notas, fluxo e metas do IDEB por escola, rede e munic\xEDpio.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "IDEB por escola e metas (INEP)",
+        tags: ["ideb", "metas", "escolas", "inep"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_EDU, "S\xE3o planilhas para baixar (Excel/ZIP). Escolhida a planilha, ela pode virar fonte: a automa\xE7\xE3o j\xE1 l\xEA Excel e ZIP."]
+      },
+      {
+        id: "inep_saeb_microdados",
+        name: "INEP: microdados do SAEB",
+        shortTitle: "Microdados do SAEB (INEP)",
+        category: "Educa\xE7\xE3o",
+        sphere: "federal",
+        source: "INEP",
+        url: "https://www.gov.br/inep/pt-br/acesso-a-informacao/dados-abertos/microdados/saeb",
+        pagina: "https://www.gov.br/inep/pt-br/acesso-a-informacao/dados-abertos/microdados/saeb",
+        format: "API",
+        description: "Microdados das provas do SAEB (profici\xEAncia em portugu\xEAs e matem\xE1tica).",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Microdados do SAEB (INEP)",
+        tags: ["saeb", "profici\xEAncia", "microdados"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_EDU, "Microdados muito grandes (v\xE1rios GB) e com documenta\xE7\xE3o pr\xF3pria: para o anu\xE1rio, prefira os resultados agregados por munic\xEDpio."]
+      },
+      {
+        id: "inep_indicadores_educacionais",
+        name: "INEP: indicadores educacionais (aprova\xE7\xE3o, reprova\xE7\xE3o, abandono)",
+        shortTitle: "Rendimento escolar (INEP)",
+        category: "Educa\xE7\xE3o",
+        sphere: "federal",
+        source: "INEP",
+        url: "https://www.gov.br/inep/pt-br/acesso-a-informacao/dados-abertos/indicadores-educacionais",
+        pagina: "https://www.gov.br/inep/pt-br/acesso-a-informacao/dados-abertos/indicadores-educacionais",
+        format: "API",
+        description: "Taxas de rendimento e outros indicadores por munic\xEDpio e escola.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Rendimento escolar (INEP)",
+        tags: ["aprova\xE7\xE3o", "reprova\xE7\xE3o", "abandono", "rendimento"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_EDU, "Planilhas por ano: escolhido o arquivo, ele pode virar fonte."]
+      },
+      {
+        id: "qedu_api",
+        name: "QEdu: API e exporta\xE7\xF5es (SAEB, IDEB, Censo Escolar)",
+        shortTitle: "QEdu",
+        category: "Educa\xE7\xE3o",
+        sphere: "federal",
+        source: "QEdu (Funda\xE7\xE3o Lemann / Meritt), com base no INEP",
+        url: "https://api.qedu.org.br/",
+        pagina: "https://api.qedu.org.br/",
+        format: "API",
+        description: "Dados do INEP organizados; exporta\xE7\xE3o por munic\xEDpio do ES no site.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "QEdu",
+        tags: ["qedu", "saeb", "ideb", "censo escolar"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_EDU, "A API exige token (cadastro). N\xE3o \xE9 fonte oficial prim\xE1ria: para publicar, confira os n\xFAmeros com o INEP."]
+      },
+      {
+        id: "basedosdados_inep",
+        name: "Base dos Dados: IDEB e SAEB prontos para consulta (BigQuery)",
+        shortTitle: "Base dos Dados (IDEB/SAEB)",
+        category: "Educa\xE7\xE3o",
+        sphere: "federal",
+        source: "Base dos Dados, com base no INEP",
+        url: "https://basedosdados.org/dataset/br-inep-ideb",
+        pagina: "https://basedosdados.org/dataset/br-inep-ideb",
+        format: "API",
+        description: "Conjuntos do INEP tratados para consulta em SQL (IDEB: br-inep-ideb; SAEB: br-inep-saeb).",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Base dos Dados (IDEB/SAEB)",
+        tags: ["base dos dados", "bigquery", "ideb", "saeb"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_EDU, "Exige conta no Google Cloud (BigQuery); a automa\xE7\xE3o n\xE3o usa esse caminho."]
+      },
+      {
+        id: "inep_pne_monitoramento",
+        name: "INEP: monitoramento das metas do PNE (por UF e munic\xEDpio)",
+        shortTitle: "Monitoramento do PNE (INEP)",
+        category: "Educa\xE7\xE3o",
+        sphere: "federal",
+        source: "INEP",
+        url: "https://www.gov.br/inep/pt-br/acesso-a-informacao/dados-abertos/inep-data/monitoramento-do-pne",
+        pagina: "https://www.gov.br/inep/pt-br/acesso-a-informacao/dados-abertos/inep-data/monitoramento-do-pne",
+        format: "API",
+        description: "Base de dados do monitoramento das 20 metas do Plano Nacional de Educa\xE7\xE3o.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Monitoramento do PNE (INEP)",
+        tags: ["pne", "metas", "educa\xE7\xE3o"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_EDU, "P\xE1gina com arquivos para baixar: escolhido o arquivo, ele pode virar fonte."]
+      },
+      {
+        id: "mec_simec_pne",
+        name: "MEC/SIMEC: painel de monitoramento do PNE e dos planos estaduais e municipais",
+        shortTitle: "SIMEC: metas do PNE",
+        category: "Educa\xE7\xE3o",
+        sphere: "federal",
+        source: "MEC: SIMEC",
+        url: "https://simec.mec.gov.br/pde/grafico_pne.php",
+        pagina: "https://simec.mec.gov.br/pde/grafico_pne.php",
+        format: "API",
+        description: "Gr\xE1ficos das metas do PNE por estado e munic\xEDpio.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "SIMEC: metas do PNE",
+        tags: ["pne", "simec", "metas"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_EDU, "\xC9 um painel (gr\xE1ficos), n\xE3o uma API de dados."]
+      },
+      {
+        id: "es_sedu_conjuntos",
+        name: "Portal de Dados Abertos do ES: conjuntos da Secretaria da Educa\xE7\xE3o (SEDU)",
+        shortTitle: "Conjuntos da SEDU no portal do ES",
+        category: "Educa\xE7\xE3o",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (organiza\xE7\xE3o SEDU)",
+        url: "https://dados.es.gov.br/organization/sedu",
+        pagina: "https://dados.es.gov.br/organization/sedu",
+        format: "API",
+        description: "Lista de conjuntos publicados pela SEDU no portal do ES.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Conjuntos da SEDU no portal do ES",
+        tags: ["sedu", "educa\xE7\xE3o", "es"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_EDU, "Dos conjuntos desta lista, mande os links que interessarem: entram como fontes, como os outros do portal."]
+      },
+      {
+        id: "es_paebes",
+        name: "SEDU: PAEBES e PAEBES Alfa (avalia\xE7\xE3o estadual anual)",
+        shortTitle: "PAEBES (SEDU)",
+        category: "Educa\xE7\xE3o",
+        sphere: "es_estadual",
+        source: "SEDU-ES",
+        url: "https://sedu.es.gov.br/paebes",
+        pagina: "https://sedu.es.gov.br/paebes",
+        format: "API",
+        description: "Resultados da avalia\xE7\xE3o estadual censit\xE1ria do ES.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "PAEBES (SEDU)",
+        tags: ["paebes", "avalia\xE7\xE3o", "es"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_EDU, "P\xE1gina da SEDU: confira se h\xE1 planilhas para baixar."]
+      },
+      {
+        id: "es_idebes",
+        name: "SEDU: IDEBES (\xEDndice estadual de educa\xE7\xE3o)",
+        shortTitle: "IDEBES (SEDU)",
+        category: "Educa\xE7\xE3o",
+        sphere: "es_estadual",
+        source: "SEDU-ES",
+        url: "https://sedu.es.gov.br/idebes",
+        pagina: "https://sedu.es.gov.br/idebes",
+        format: "API",
+        description: "\xCDndice de desenvolvimento da educa\xE7\xE3o b\xE1sica do ES.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "IDEBES (SEDU)",
+        tags: ["idebes", "educa\xE7\xE3o", "es"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_EDU, "P\xE1gina da SEDU: confira se h\xE1 planilhas para baixar."]
+      },
+      {
+        id: "tce_cidades_educacao",
+        name: "TCE-ES: painel CidadES, \xE1rea de Educa\xE7\xE3o (25% constitucional, Fundeb, creches, magist\xE9rio, IDEB)",
+        shortTitle: "CidadES Educa\xE7\xE3o (TCE-ES)",
+        category: "Munic\xEDpios",
+        sphere: "es_municipal",
+        source: "TCE-ES: CidadES",
+        url: "https://cidades.tcees.tc.br/",
+        pagina: "https://cidades.tcees.tc.br/",
+        format: "API",
+        description: "Painel do TCE-ES que cruza gastos com educa\xE7\xE3o, Fundeb, vagas em creches e IDEB dos 78 munic\xEDpios.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "CidadES Educa\xE7\xE3o (TCE-ES)",
+        tags: ["tce", "cidades", "educa\xE7\xE3o", "fundeb", "creches"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_EDU, "Painel com exporta\xE7\xE3o manual. Os gastos com educa\xE7\xE3o por munic\xEDpio j\xE1 est\xE3o no cat\xE1logo (TCE-ES, arquivo Educa\xE7\xE3o)."]
+      },
+      // ── IBGE (lista enviada pela redação, out/2026). APIs oficiais conhecidas; tabelas e variáveis a conferir ──
+      {
+        id: "fed_ibge_distritos_es",
+        name: "IBGE: Distritos do Esp\xEDrito Santo",
+        shortTitle: "Distritos do ES (IBGE)",
+        category: "Refer\xEAncias territoriais",
+        sphere: "federal",
+        source: "IBGE: API de Localidades",
+        url: "https://servicodados.ibge.gov.br/api/v1/localidades/estados/32/distritos",
+        pagina: "https://servicodados.ibge.gov.br/api/docs/localidades",
+        format: "JSON",
+        description: "Distritos dos munic\xEDpios capixabas, com c\xF3digos do IBGE e o munic\xEDpio de cada um.",
+        columnsPreview: ["id", "nome", "municipio_id", "municipio_nome"],
+        yearsPreview: "Divis\xE3o territorial vigente",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "Distritos do ES",
+        tags: ["distritos", "ibge", "territ\xF3rio"],
+        avisos: [ORIGEM_IBGE]
+      },
+      {
+        id: "fed_ibge_regioes_imediatas_es",
+        name: "IBGE: Regi\xF5es Geogr\xE1ficas Imediatas do ES",
+        shortTitle: "Regi\xF5es imediatas do ES (IBGE)",
+        category: "Refer\xEAncias territoriais",
+        sphere: "federal",
+        source: "IBGE: API de Localidades",
+        url: "https://servicodados.ibge.gov.br/api/v1/localidades/estados/32/regioes-imediatas",
+        pagina: "https://servicodados.ibge.gov.br/api/docs/localidades",
+        format: "JSON",
+        description: "Regi\xF5es geogr\xE1ficas imediatas do ES (agrupamentos de munic\xEDpios usados pelo IBGE).",
+        columnsPreview: ["id", "nome", "regiao-intermediaria_nome"],
+        yearsPreview: "Divis\xE3o regional vigente",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "Regi\xF5es imediatas do ES",
+        tags: ["regi\xF5es", "ibge", "territ\xF3rio"],
+        avisos: [ORIGEM_IBGE]
+      },
+      {
+        id: "fed_ibge_populacao_censo2022",
+        name: "IBGE: Popula\xE7\xE3o residente dos munic\xEDpios do ES (Censo 2022)",
+        shortTitle: "Popula\xE7\xE3o Censo 2022 (IBGE)",
+        category: "Popula\xE7\xE3o",
+        sphere: "federal",
+        source: "IBGE: Censo Demogr\xE1fico 2022 (SIDRA, tabela 4714)",
+        url: "https://servicodados.ibge.gov.br/api/v3/agregados/4714/periodos/2022/variaveis/93?localidades=N6[N3[32]]",
+        pagina: "https://sidra.ibge.gov.br/tabela/4714",
+        format: "JSON",
+        description: "Popula\xE7\xE3o residente dos 78 munic\xEDpios no Censo 2022.",
+        columnsPreview: ["cod_ibge", "municipio", "variavel", "unidade", "ano", "valor"],
+        yearsPreview: "2022",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "N\xE3o muda (Censo); anual s\xF3 para conferir revis\xF5es",
+        suggestedName: "Popula\xE7\xE3o Censo 2022",
+        tags: ["popula\xE7\xE3o", "censo", "munic\xEDpios", "ibge"],
+        avisos: [ORIGEM_IBGE, AGREGADOS]
+      },
+      {
+        id: "fed_ibge_estimativa_populacao",
+        name: "IBGE: Estimativas de popula\xE7\xE3o dos munic\xEDpios do ES",
+        shortTitle: "Estimativas de popula\xE7\xE3o (IBGE)",
+        category: "Popula\xE7\xE3o",
+        sphere: "federal",
+        source: "IBGE: Estimativas da Popula\xE7\xE3o (SIDRA, tabela 6579)",
+        url: "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/-10/variaveis/9324?localidades=N6[N3[32]]",
+        pagina: "https://sidra.ibge.gov.br/tabela/6579",
+        format: "JSON",
+        description: "Popula\xE7\xE3o estimada dos munic\xEDpios, publicada pelo IBGE todo ano (os 10 per\xEDodos mais recentes).",
+        columnsPreview: ["cod_ibge", "municipio", "variavel", "unidade", "ano", "valor"],
+        yearsPreview: "10 per\xEDodos mais recentes",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual (o IBGE divulga em agosto)",
+        suggestedName: "Estimativas de popula\xE7\xE3o",
+        tags: ["popula\xE7\xE3o", "estimativa", "munic\xEDpios", "ibge"],
+        avisos: [ORIGEM_IBGE, AGREGADOS, 'O exemplo da lista usava "periodos/-1" (s\xF3 o ano mais recente); aqui s\xE3o os 10 mais recentes, para a s\xE9rie hist\xF3rica.']
+      },
+      {
+        id: "fed_ibge_pib_municipal",
+        name: "IBGE: PIB dos munic\xEDpios do ES (pre\xE7os correntes)",
+        shortTitle: "PIB municipal (IBGE)",
+        category: "Economia",
+        sphere: "federal",
+        source: "IBGE: PIB dos Munic\xEDpios (SIDRA, tabela 5938)",
+        url: "https://servicodados.ibge.gov.br/api/v3/agregados/5938/periodos/-10/variaveis/37?localidades=N6[N3[32]]",
+        pagina: "https://sidra.ibge.gov.br/tabela/5938",
+        format: "JSON",
+        description: "Produto Interno Bruto dos munic\xEDpios a pre\xE7os correntes (mil reais), 10 anos mais recentes.",
+        columnsPreview: ["cod_ibge", "municipio", "variavel", "unidade", "ano", "valor"],
+        yearsPreview: "10 anos mais recentes",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual (o IBGE divulga com cerca de 2 anos de defasagem)",
+        suggestedName: "PIB municipal",
+        tags: ["pib", "economia", "munic\xEDpios", "ibge"],
+        avisos: [ORIGEM_IBGE, AGREGADOS, "A vari\xE1vel 37 \xE9 o PIB a pre\xE7os correntes. O PIB per capita \xE9 outra vari\xE1vel da mesma tabela: confira o c\xF3digo nos metadados (\u2026/agregados/5938/metadados) e cadastre como outra fonte."]
+      },
+      {
+        id: "fed_ibge_cnae_classes",
+        name: "IBGE: Classifica\xE7\xE3o Nacional de Atividades Econ\xF4micas (CNAE), classes",
+        shortTitle: "CNAE: classes de atividade (IBGE)",
+        category: "Refer\xEAncias",
+        sphere: "federal",
+        source: "IBGE / CONCLA: API CNAE",
+        url: "https://servicodados.ibge.gov.br/api/v2/cnae/classes",
+        pagina: "https://servicodados.ibge.gov.br/api/docs/cnae?versao=2",
+        format: "JSON",
+        description: "Tabela de classes da CNAE com grupo, divis\xE3o e se\xE7\xE3o: \xFAtil para nomear atividades em dados de empresas (CNPJ).",
+        columnsPreview: ["id", "descricao", "grupo_descricao", "grupo_divisao_secao_descricao"],
+        yearsPreview: "Vers\xE3o vigente",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "CNAE classes",
+        tags: ["cnae", "atividades", "empresas", "ibge"],
+        avisos: [ORIGEM_IBGE, "Tabela de refer\xEAncia (dicion\xE1rio), n\xE3o uma s\xE9rie: serve para juntar com outras bases."]
+      },
+      {
+        id: "fed_ibge_malhas_es",
+        name: "IBGE: Malhas territoriais do ES (mapa dos 78 munic\xEDpios, GeoJSON)",
+        shortTitle: "Mapa dos munic\xEDpios do ES (IBGE)",
+        category: "Refer\xEAncias territoriais",
+        sphere: "federal",
+        source: "IBGE: API de Malhas (v3)",
+        url: "https://servicodados.ibge.gov.br/api/v3/malhas/estados/32?formato=application/vnd.geo+json&qualidade=intermediaria&intrarregiao=municipio",
+        pagina: "https://servicodados.ibge.gov.br/api/docs/malhas?versao=3",
+        format: "API",
+        description: "Pol\xEDgonos dos 78 munic\xEDpios em GeoJSON. A liga\xE7\xE3o com as tabelas \xE9 feita pelo c\xF3digo do IBGE (properties.codarea).",
+        columnsPreview: [],
+        yearsPreview: "Malha vigente",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Mapa dos munic\xEDpios do ES",
+        tags: ["mapa", "geojson", "munic\xEDpios", "ibge"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_IBGE, 'Dados de mapa, n\xE3o tabela: os pain\xE9is atuais ainda n\xE3o desenham mapas. Para web, a qualidade "intermediaria" ou "minima" carrega bem mais r\xE1pido que "maxima".']
+      },
+      {
+        id: "fed_ibge_sidra",
+        name: "IBGE: SIDRA e API de Agregados (todas as pesquisas: Censo, PNAD, PAM, IPCA\u2026)",
+        shortTitle: "SIDRA / Agregados (IBGE)",
+        category: "Refer\xEAncias",
+        sphere: "federal",
+        source: "IBGE: SIDRA",
+        url: "https://apisidra.ibge.gov.br/",
+        pagina: "https://servicodados.ibge.gov.br/api/docs/agregados?versao=3",
+        format: "API",
+        description: "Qualquer tabela do SIDRA pode virar fonte: monte a consulta no gerador de links e use o endere\xE7o da API de Agregados (servicodados.ibge.gov.br/api/v3/agregados/\u2026).",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "SIDRA",
+        tags: ["sidra", "ibge", "censo", "pnad", "agregados"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_IBGE, "Para os munic\xEDpios do ES, use localidades=N6[N3[32]]. Endere\xE7os da API de Agregados s\xE3o lidos pelo app e pela automa\xE7\xE3o j\xE1 em formato de tabela."]
+      },
+      {
+        id: "fed_ibge_cidades_indicadores",
+        name: "IBGE Cidades@: indicadores municipais (IDEB, mortalidade infantil, sal\xE1rio m\xE9dio, frota\u2026)",
+        shortTitle: "Indicadores IBGE Cidades",
+        category: "Refer\xEAncias",
+        sphere: "federal",
+        source: "IBGE: API de Pesquisas",
+        url: "https://servicodados.ibge.gov.br/api/v1/pesquisas/indicadores/",
+        pagina: "https://servicodados.ibge.gov.br/api/docs/pesquisas",
+        format: "API",
+        description: "Indicadores consolidados dos pain\xE9is do IBGE Cidades@.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "IBGE Cidades",
+        tags: ["ibge cidades", "ideb", "mortalidade", "sal\xE1rio", "frota"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_IBGE, "Os c\xF3digos de indicador da lista (29166, 29167\u2026) precisam ser conferidos no cat\xE1logo de indicadores; o formato da resposta tamb\xE9m, antes de virar fonte."]
+      },
+      {
+        id: "fed_ibge_nomes",
+        name: "IBGE: Nomes no Brasil (frequ\xEAncia e ranking por UF e munic\xEDpio)",
+        shortTitle: "Nomes (IBGE)",
+        category: "Refer\xEAncias",
+        sphere: "federal",
+        source: "IBGE: API de Nomes (Censo)",
+        url: "https://servicodados.ibge.gov.br/api/v2/nomes/ranking?localidade=32",
+        pagina: "https://servicodados.ibge.gov.br/api/docs/nomes?versao=2",
+        format: "API",
+        description: "Ranking de nomes mais comuns no ES e frequ\xEAncia de um nome por d\xE9cada. Bom para pautas leves.",
+        columnsPreview: [],
+        yearsPreview: "Censo",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Nomes IBGE",
+        tags: ["nomes", "censo", "curiosidades"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_IBGE]
+      },
+      {
+        id: "fed_ibge_calendario",
+        name: "IBGE: Calend\xE1rio de divulga\xE7\xF5es (IPCA, PIB, PNAD\u2026)",
+        shortTitle: "Calend\xE1rio de divulga\xE7\xF5es (IBGE)",
+        category: "Refer\xEAncias",
+        sphere: "federal",
+        source: "IBGE: API de Calend\xE1rio",
+        url: "https://servicodados.ibge.gov.br/api/v3/calendario/",
+        pagina: "https://servicodados.ibge.gov.br/api/docs/calendario?versao=3",
+        format: "API",
+        description: "Datas das pr\xF3ximas divulga\xE7\xF5es do IBGE: \xFAtil para a pauta e para ajustar a agenda das fontes autom\xE1ticas.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "weekly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Calend\xE1rio IBGE",
+        tags: ["calend\xE1rio", "pauta", "divulga\xE7\xF5es"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_IBGE]
+      },
+      {
+        id: "fed_ibge_projecao_populacao",
+        name: "IBGE: Proje\xE7\xE3o da popula\xE7\xE3o do ES em tempo real",
+        shortTitle: "Proje\xE7\xE3o da popula\xE7\xE3o (IBGE)",
+        category: "Popula\xE7\xE3o",
+        sphere: "federal",
+        source: "IBGE: API de Proje\xE7\xF5es",
+        url: "https://servicodados.ibge.gov.br/api/v1/projecoes/populacao/32",
+        pagina: "https://servicodados.ibge.gov.br/api/docs/projecoes",
+        format: "API",
+        description: 'Proje\xE7\xE3o instant\xE2nea da popula\xE7\xE3o (o "rel\xF3gio da popula\xE7\xE3o").',
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Proje\xE7\xE3o da popula\xE7\xE3o",
+        tags: ["popula\xE7\xE3o", "proje\xE7\xE3o"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_IBGE, "\xC9 um valor instant\xE2neo (um n\xFAmero), n\xE3o uma s\xE9rie por munic\xEDpio. Para o anu\xE1rio, use as estimativas anuais."]
+      },
       // ── Links conferidos pela redação (out/2026) ──
       {
         id: "es_receitas_municipios",
@@ -16056,7 +17490,7 @@ function validateConfig(raw) {
       errs.push(`${where}: item inv\xE1lido.`);
       return;
     }
-    ID_RE.test(f.id || "") || errs.push(`${where}: "id" deve ter s\xF3 letras min\xFAsculas, n\xFAmeros e h\xEDfens.`), ids.has(f.id) && errs.push(`${where}: "id" repetido.`), ids.add(f.id), f.nome || errs.push(`${where}: falta "nome".`), [f.url ? 1 : 0, f.ckan ? 1 : 0, f.arquivo ? 1 : 0].reduce((a, b) => a + b, 0) > 1 && errs.push(`${where}: use s\xF3 uma origem: "url", "ckan" ou "arquivo".`), f.arquivo ? (!/^entrada\/[\w\-./ ]+\.(xlsx|csv|tsv|json|zip)$/i.test(f.arquivo) || f.arquivo.includes("..")) && errs.push(`${where}: "arquivo" deve estar na pasta entrada/ e terminar em .xlsx, .csv, .json ou .zip (ex.: entrada/anuario/pib.xlsx).`) : f.ckan ? (/^https:\/\//.test(f.ckan.portal || "") || errs.push(`${where}: ckan.portal precisa ser um endere\xE7o https:// (ex.: https://dados.es.gov.br).`), (!f.ckan.conjunto || /\//.test(f.ckan.conjunto)) && errs.push(`${where}: ckan.conjunto \xE9 o final do endere\xE7o do conjunto (sem barras), ex.: portal-da-transparencia-receitas.`)) : /^https?:\/\//.test(f.url || "") ? /\/dataset\/[^/]+\/?$/.test(f.url || "") && errs.push(`${where}: a "url" \xE9 a p\xE1gina de um conjunto CKAN, n\xE3o um arquivo. Use o bloco "ckan" (ver exemplo em fontes.yml).`) : errs.push(`${where}: informe a origem: "url" (http:// ou https://), um bloco "ckan" ou "arquivo" (planilha em entrada/).`), /(^|[^{])\{[A-Za-z_]+\}(?!\})/.test(f.url || "") && errs.push(`${where}: na "url", use chaves duplas nos marcadores, ex.: {{ANO}} (n\xE3o {ANO}).`);
+    ID_RE.test(f.id || "") || errs.push(`${where}: "id" deve ter s\xF3 letras min\xFAsculas, n\xFAmeros e h\xEDfens.`), ids.has(f.id) && errs.push(`${where}: "id" repetido.`), ids.add(f.id), f.nome || errs.push(`${where}: falta "nome".`), [f.url ? 1 : 0, f.ckan ? 1 : 0, f.arquivo ? 1 : 0].reduce((a, b) => a + b, 0) > 1 && errs.push(`${where}: use s\xF3 uma origem: "url", "ckan" ou "arquivo".`), f.sinal_de_novidade !== void 0 && !/^https?:\/\//.test(String(f.sinal_de_novidade)) && errs.push(`${where}: sinal_de_novidade precisa ser um endere\xE7o http(s).`), f.anos && (Number(f.anos.de) >= 1990 && Number(f.anos.de) <= 2100 || errs.push(`${where}: anos.de deve ser um ano (ex.: 2015).`), (!f.url || !/\{\{(ANO|YYYY)\}\}/i.test(f.url)) && errs.push(`${where}: com "anos", a url precisa ter o marcador {{ANO}} no lugar do ano.`)), f.arquivo ? (!/^entrada\/[\w\-./ ]+\.(xlsx|csv|tsv|json|zip)$/i.test(f.arquivo) || f.arquivo.includes("..")) && errs.push(`${where}: "arquivo" deve estar na pasta entrada/ e terminar em .xlsx, .csv, .json ou .zip (ex.: entrada/anuario/pib.xlsx).`) : f.ckan ? (/^https:\/\//.test(f.ckan.portal || "") || errs.push(`${where}: ckan.portal precisa ser um endere\xE7o https:// (ex.: https://dados.es.gov.br).`), (!f.ckan.conjunto || /\//.test(f.ckan.conjunto)) && errs.push(`${where}: ckan.conjunto \xE9 o final do endere\xE7o do conjunto (sem barras), ex.: portal-da-transparencia-receitas.`)) : /^https?:\/\//.test(f.url || "") ? /\/dataset\/[^/]+\/?$/.test(f.url || "") && errs.push(`${where}: a "url" \xE9 a p\xE1gina de um conjunto CKAN, n\xE3o um arquivo. Use o bloco "ckan" (ver exemplo em fontes.yml).`) : errs.push(`${where}: informe a origem: "url" (http:// ou https://), um bloco "ckan" ou "arquivo" (planilha em entrada/).`), /(^|[^{])\{[A-Za-z_]+\}(?!\})/.test(f.url || "") && errs.push(`${where}: na "url", use chaves duplas nos marcadores, ex.: {{ANO}} (n\xE3o {ANO}).`);
     let fr = f.agenda && f.agenda.frequencia;
     ["horaria", "diaria", "semanal", "mensal", "anual"].includes(fr) || errs.push(`${where}: agenda.frequencia deve ser horaria, diaria, semanal, mensal ou anual.`), f.agenda?.hora && !/^\d{2}:\d{2}$/.test(f.agenda.hora) && errs.push(`${where}: agenda.hora no formato "06:00".`), fr === "mensal" && !(Number(f.agenda.dia_do_mes) >= 1 && Number(f.agenda.dia_do_mes) <= 31) && errs.push(`${where}: agenda.dia_do_mes (1\u201331) \xE9 obrigat\xF3rio na frequ\xEAncia mensal.`), fr === "semanal" && !(Number(f.agenda.dia_da_semana) >= 0 && Number(f.agenda.dia_da_semana) <= 6) && errs.push(`${where}: agenda.dia_da_semana (0\u20136) \xE9 obrigat\xF3rio na frequ\xEAncia semanal.`);
   }), errs.length) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
@@ -16163,8 +17597,10 @@ function ultimoHorarioAgendado(f, now) {
 }
 function fonteDevida(f, estado, now, forcar = !1) {
   if (forcar) return "forcada";
+  if (estado?.emAndamento) return "continuacao";
   let ciclo = ultimoHorarioAgendado(f, now), ultima = estado?.ultimaVerificacao ? new Date(estado.ultimaVerificacao) : null;
   if (!ultima || ultima < ciclo) return "agendada";
+  if (estado?.ultimoErro && estado.ultimoErroEm && now.getTime() - new Date(estado.ultimoErroEm).getTime() >= 6 * 36e5) return "apos_erro";
   let dias = f.agenda.tentar_ate_novidade_dias || 0;
   if (dias > 0 && estado?.aguardandoNovidadeDesde && f.agenda.frequencia !== "horaria" && f.agenda.frequencia !== "diaria") {
     let desde = new Date(estado.aguardandoNovidadeDesde), limite = new Date(desde.getTime() + dias * 864e5);
@@ -16272,6 +17708,13 @@ async function lerXlsx(buf, opts = {}) {
 }
 
 // automation/tratador.ts
+function numeroPonto(v) {
+  if (typeof v == "number") return isFinite(v) ? v : null;
+  let s = String(v ?? "").trim();
+  if (s === "") return null;
+  let n = Number(s);
+  return isFinite(n) ? n : null;
+}
 function numeroBr(v) {
   if (typeof v == "number") return isFinite(v) ? v : null;
   if (v == null) return null;
@@ -16290,7 +17733,7 @@ var normalizarNome = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u
     this.codigos = /* @__PURE__ */ new Map();
     this.descartadosMes = 0;
     this.nLinhas = 0;
-    this.porNome = new Map(municipios.map((m) => [normalizarNome(m.nome), m]));
+    this.porNome = new Map(municipios.map((m) => [normalizarNome(m.nome), m])), this.porCodigo = new Map(municipios.map((m) => [String(m.codigo), m]));
     let brt2 = new Date(agora.getTime() - 3 * 36e5);
     this.anoAtual = brt2.getUTCFullYear(), this.mesAtual = brt2.getUTCMonth() + 1;
   }
@@ -16309,14 +17752,19 @@ var normalizarNome = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u
     let ren = t.renomear || {}, o = {};
     for (let k in r) o[ren[k] || k] = r[k];
     for (let c of t.texto || []) typeof o[c] == "string" && (o[c] = o[c].replace(/\s+/g, " ").trim());
-    for (let c of t.numeros || []) c in o && (o[c] = numeroBr(o[c]));
+    let paraNumero = t.decimal === "ponto" ? numeroPonto : numeroBr;
+    for (let c of t.numeros || []) c in o && (o[c] = paraNumero(o[c]));
     for (let c of t.inteiros || []) if (c in o) {
-      let n = numeroBr(o[c]);
+      let n = paraNumero(o[c]);
       o[c] = n === null ? null : Math.round(n);
     }
     if (t.municipio && t.municipio.coluna in o) {
       let m = this.porNome.get(normalizarNome(o[t.municipio.coluna]));
       m ? (o[t.municipio.coluna] = m.nome, t.municipio.codigo_ibge && (o[t.municipio.codigo_ibge] = m.codigo)) : o[t.municipio.coluna] && (this.porNome.size && this.naoReconhecidos.add(String(o[t.municipio.coluna])), t.municipio.codigo_ibge && (o[t.municipio.codigo_ibge] = null)), t.municipio.codigo_ibge && this.codigos.set(String(o[t.municipio.coluna]), o[t.municipio.codigo_ibge] ?? null);
+    }
+    if (t.municipio_por_codigo && t.municipio_por_codigo.coluna in o) {
+      let cod = String(o[t.municipio_por_codigo.coluna] ?? "").trim(), m = this.porCodigo.get(cod);
+      o[t.municipio_por_codigo.nome] = m ? m.nome : null, !m && cod && this.porCodigo.size && /^\d{7}$/.test(cod) && this.naoReconhecidos.add(`c\xF3digo ${cod}`);
     }
     for (let c of t.descartar_vazias || []) if (o[c] === null || o[c] === void 0 || String(o[c]).trim() === "") return null;
     if (t.descartar_mes_em_andamento) {
@@ -16454,7 +17902,11 @@ function detectarFormato(f, body, url) {
 function carimbo(now) {
   return new Date(now.getTime() - 108e5).toISOString().slice(0, 16).replace("T", "_").replace(":", "");
 }
-function resolverUrl(url, now) {
+function resolverUrl(url, now, municipios = []) {
+  if (/\{\{MUNICIPIOS_ES\}\}/i.test(url)) {
+    if (municipios.length < 70) throw new Error("o endere\xE7o usa {{MUNICIPIOS_ES}}, mas a lista de munic\xEDpios do IBGE n\xE3o est\xE1 dispon\xEDvel nesta execu\xE7\xE3o");
+    url = url.replace(/\{\{MUNICIPIOS_ES\}\}/gi, municipios.map((m) => m.codigo).join("|"));
+  }
   let pt = url.replace(/\{\{ANO_ANTERIOR\}\}/gi, "{{PREV_YYYY}}").replace(/\{\{MES_ANTERIOR\}\}/gi, "{{PREV_MM}}").replace(/\{\{ANO\}\}/gi, "{{YYYY}}").replace(/\{\{MES\}\}/gi, "{{MM}}").replace(/\{\{DIA\}\}/gi, "{{DD}}");
   return resolveDynamicUrl(pt, now);
 }
@@ -16513,15 +17965,29 @@ function* pedacosDeTexto(body) {
   let resto = dec.decode();
   resto && (yield resto);
 }
+function colunasDeTexto(f) {
+  let t = f.tratamento || {}, inverso = {};
+  for (let [orig, novo] of Object.entries(t.renomear || {})) inverso[String(novo)] = orig;
+  let nomes = /* @__PURE__ */ new Set([
+    ...t.texto || [],
+    ...Object.entries(t.tipos || {}).filter(([, v]) => v === "category" || v === "string").map(([k]) => k),
+    ...t.municipio_por_codigo ? [t.municipio_por_codigo.coluna] : []
+  ]), saida = /* @__PURE__ */ new Set();
+  for (let n of nomes)
+    saida.add(n), inverso[n] && saida.add(inverso[n]);
+  for (let k of Object.keys(t.filtrar || {})) saida.add(k);
+  return saida;
+}
 async function lerLinhas(f, body, formato, aoLer) {
   let n = 0;
-  if (formato === "csv")
+  if (formato === "csv") {
+    let texto = colunasDeTexto(f);
     return await new Promise((resolve, reject) => {
       let falhou = !1;
       import_papaparse2.default.parse(Readable.from(pedacosDeTexto(body)), {
         header: !0,
         skipEmptyLines: "greedy",
-        dynamicTyping: !0,
+        dynamicTyping: (campo) => !texto.has(String(campo)),
         delimitersToGuess: [";", "	", ",", "|"],
         transformHeader: (h) => h.trim(),
         step: (res, parser) => {
@@ -16540,6 +18006,7 @@ async function lerLinhas(f, body, formato, aoLer) {
         }
       });
     }), n;
+  }
   let recs;
   if (formato === "xlsx") recs = await lerXlsx(body, { planilha: f.planilha, linhaCabecalho: f.linha_cabecalho });
   else {
@@ -16558,7 +18025,16 @@ async function processarFonte(f, estado, dir, now, fetcher, municipios, opts = {
     } catch {
     }
   }, log = (m) => console.log(`[${f.id}] ${m}`), brt2 = new Date(now.getTime() - 3 * 36e5), mesAtual = brt2.toISOString().slice(0, 7), cfg = sha256(JSON.stringify({ t: f.tratamento || null, planilha: f.planilha, cab: f.linha_cabecalho, zip: f.arquivo_no_zip, json: f.caminho_json, formato: f.formato })), podeReaproveitar = !!f.tratamento?.agrupar?.por?.length && !f.dados_pessoais, pastaCache = join2(dir, "estado", "cache", pastaFonte(f)), alvos;
-  f.arquivo ? alvos = [{ chave: slug(basename2(f.arquivo)), nome: basename2(f.arquivo), local: f.arquivo }] : f.ckan ? alvos = (await recursosCkan(f, now, fetcher)).map((r) => ({ chave: slug(r.nome), nome: r.nome, url: r.url, atualizadoEm: r.atualizadoEm || void 0 })) : alvos = [{ chave: slug(f.id), nome: f.id, url: resolverUrl(f.url || "", now) }], estado.partes = estado.partes || {};
+  if (f.arquivo) alvos = [{ chave: slug(basename2(f.arquivo)), nome: basename2(f.arquivo), local: f.arquivo }];
+  else if (f.ckan) alvos = (await recursosCkan(f, now, fetcher)).map((r) => ({ chave: slug(r.nome), nome: r.nome, url: r.url, atualizadoEm: r.atualizadoEm || void 0 }));
+  else if (f.anos) {
+    alvos = [];
+    for (let ano = Number(f.anos.de); ano <= brt2.getUTCFullYear(); ano++) {
+      let url = resolverUrl((f.url || "").replace(/\{\{(ANO|YYYY)\}\}/gi, String(ano)), now, municipios);
+      alvos.push({ chave: slug(`${f.id}-${ano}`), nome: `${f.id}-${ano}`, url, ano });
+    }
+  } else alvos = [{ chave: slug(f.id), nome: f.id, url: resolverUrl(f.url || "", now, municipios) }];
+  estado.partes = estado.partes || {};
   let global2 = new Tratador(f.tratamento, municipios, now), hashes = {}, arquivosBrutos = [], avisos = [], urls = [], baixados = 0, reaproveitados = 0, feitos = 0, lerCache = (chave) => {
     let arq = join2(pastaCache, `${chave}.json`);
     if (!podeReaproveitar || !existsSync2(arq)) return null;
@@ -16570,8 +18046,8 @@ async function processarFonte(f, estado, dir, now, fetcher, municipios, opts = {
     }
   };
   for (let a of alvos) {
-    let prev = estado.partes[a.chave], anoArquivo = anoDe(a.nome) ?? anoDe(a.url || ""), fechado = anoArquivo !== null && anoArquivo < brt2.getUTCFullYear(), conferidoHaPouco = !!prev?.verificadoEm && now.getTime() - new Date(prev.verificadoEm).getTime() < 30 * 864e5;
-    if (fechado && conferidoHaPouco && a.atualizadoEm && prev?.atualizadoEm === a.atualizadoEm && prev.hash) {
+    let prev = estado.partes[a.chave], anoArquivo = anoDe(a.nome) ?? anoDe(a.url || ""), fechado = anoArquivo !== null && anoArquivo < brt2.getUTCFullYear(), prazoConferencia = (a.atualizadoEm ? 30 : 90) * 864e5, conferidoHaPouco = !!prev?.verificadoEm && now.getTime() - new Date(prev.verificadoEm).getTime() < prazoConferencia, mesmaData = a.atualizadoEm ? prev?.atualizadoEm === a.atualizadoEm : !0;
+    if (fechado && conferidoHaPouco && mesmaData && prev?.hash) {
       let c = lerCache(a.chave);
       if (c) {
         global2.mesclar(c), hashes[a.chave] = prev.hash, urls.push(a.url || a.local || ""), reaproveitados++, feitos++;
@@ -16589,7 +18065,16 @@ async function processarFonte(f, estado, dir, now, fetcher, municipios, opts = {
     } else {
       let t0 = Date.now();
       log(`baixando ${a.nome}\u2026`);
-      let p = await baixarParte(f, a.nome, a.url, fetcher, Math.max(6e4, prazo - (Date.now() - inicio) - 6e4));
+      let p;
+      try {
+        p = await baixarParte(f, a.nome, a.url, fetcher, Math.max(6e4, prazo - (Date.now() - inicio) - 6e4));
+      } catch (e) {
+        if (a.ano === brt2.getUTCFullYear() && /HTTP 404/.test(String(e?.message))) {
+          log(`${a.nome}: ainda n\xE3o publicado (segue sem ele)`), feitos++;
+          continue;
+        }
+        throw e;
+      }
       body = p.body, finalUrl = p.finalUrl, baixados++;
       let seg = Math.round((Date.now() - t0) / 1e3);
       log(`${a.nome}: ${(body.length / 1048576).toFixed(1).replace(".", ",")} MB em ${seg < 90 ? `${seg} s` : `${Math.round(seg / 60)} min`}`);
@@ -16713,7 +18198,7 @@ async function executar(opts, deps) {
 
 Corrija no app; as outras fontes continuam funcionando.` });
   let linhas = [], novosFinais = /* @__PURE__ */ new Map(), municipios = [];
-  if (config.fontes.some((f) => f.ativo !== !1 && f.tratamento?.municipio))
+  if (config.fontes.some((f) => f.ativo !== !1 && (f.tratamento?.municipio || f.tratamento?.municipio_por_codigo || /\{\{MUNICIPIOS_ES\}\}/i.test(f.url || ""))))
     try {
       municipios = await carregarMunicipios(opts.dados, deps.fetcher);
     } catch (e) {
@@ -16727,14 +18212,24 @@ Corrija no app; as outras fontes continuam funcionando.` });
       parada && alertas.push({ projeto: f.projeto, chave: `parada:${f.id}`, gravidade: "atencao", titulo: `Fonte sem dado novo: ${f.nome}`, corpo: parada });
       continue;
     }
+    let sinal;
+    if (f.sinal_de_novidade)
+      try {
+        let r = await deps.fetcher(resolverUrl(f.sinal_de_novidade, now), { totalMs: 6e4 });
+        if (r.status < 400 && (sinal = sha256(r.body), !opts.forcar && st.hash && st.sinal === sinal)) {
+          st.ultimaVerificacao = now.toISOString(), motivo === "agendada" && (f.agenda.tentar_ate_novidade_dias || 0) > 0 && !st.aguardandoNovidadeDesde && (st.aguardandoNovidadeDesde = ultimoHorarioAgendado(f, now).toISOString()), estado[f.id] = st, linhas.push({ fonte: rotulo(f), resultado: "\u2796 sem novidade", detalhe: "o sinal de atualiza\xE7\xE3o da fonte n\xE3o mudou (nada foi baixado)" });
+          continue;
+        }
+      } catch {
+      }
     try {
       estado[f.id] = st;
       let c = await processarFonte(f, st, opts.dados, now, deps.fetcher, municipios, { prazoMs, inicio, aoConcluirArquivo: gravarEstado });
       if (c.incompleto) {
-        linhas.push({ fonte: rotulo(f), resultado: "\u23F3 em andamento", detalhe: `${c.incompleto.feitos} de ${c.incompleto.total} arquivos processados; continua na pr\xF3xima execu\xE7\xE3o` }), estado[f.id] = st;
+        linhas.push({ fonte: rotulo(f), resultado: "\u23F3 em andamento", detalhe: `${c.incompleto.feitos} de ${c.incompleto.total} arquivos processados; continua na pr\xF3xima execu\xE7\xE3o` }), st.emAndamento = !0, estado[f.id] = st;
         continue;
       }
-      st.ultimaVerificacao = now.toISOString(), delete st.ultimoErro, delete st.ultimoErroEm;
+      st.ultimaVerificacao = now.toISOString(), delete st.emAndamento, sinal && (st.sinal = sinal), delete st.ultimoErro, delete st.ultimoErroEm;
       let extraArquivos = c.reaproveitados > 0 ? ` \xB7 ${c.baixados} ${c.baixados === 1 ? "arquivo baixado" : "arquivos baixados"}; ${c.reaproveitados} ${c.reaproveitados === 1 ? "ano fechado reaproveitado" : "anos fechados reaproveitados"} sem baixar` : "";
       if (c.mudou && c.final) {
         let coletadoEm = now.toISOString(), final = c.final, avisos = c.avisos;
@@ -16744,7 +18239,7 @@ Corrija no app; as outras fontes continuam funcionando.` });
           l && (l.detalhe = `${l.detalhe || ""} \xB7 ${info.replace(/^Agrupado-info: /, "").replace(/^Agrupado: /, "agrupado: ")}`);
         }
       } else
-        motivo === "agendada" && (f.agenda.tentar_ate_novidade_dias || 0) > 0 && !st.aguardandoNovidadeDesde && (st.aguardandoNovidadeDesde = ultimoHorarioAgendado(f, now).toISOString()), linhas.push({ fonte: rotulo(f), resultado: "\u2796 sem novidade", detalhe: ((motivo === "nova_tentativa" ? "nova tentativa (aguardando publica\xE7\xE3o da fonte)" : "") + extraArquivos).replace(/^ · /, "") });
+        motivo === "agendada" && (f.agenda.tentar_ate_novidade_dias || 0) > 0 && !st.aguardandoNovidadeDesde && (st.aguardandoNovidadeDesde = ultimoHorarioAgendado(f, now).toISOString()), linhas.push({ fonte: rotulo(f), resultado: "\u2796 sem novidade", detalhe: ((motivo === "nova_tentativa" ? "nova tentativa (aguardando publica\xE7\xE3o da fonte)" : motivo === "apos_erro" ? "nova tentativa depois do erro anterior: funcionou" : "") + extraArquivos).replace(/^ · /, "") });
       let parada = fonteParada(f, st, now);
       parada && alertas.push({ projeto: f.projeto, chave: `parada:${f.id}`, gravidade: "atencao", titulo: `Fonte sem dado novo: ${f.nome}`, corpo: parada });
     } catch (e) {
@@ -16863,7 +18358,7 @@ Os pain\xE9is continuam com a vers\xE3o anterior. No app: Bases \u2192 "${atual.
     }
   return { linhas, alertas, publicacao, issues, resumo: md, siteMudou: !!publicacao?.mudou };
 }
-var VERSAO_AUTOMACAO = "2026-10-22.10 (download retoma de onde parou)";
+var VERSAO_AUTOMACAO = "2026-10-22.16 (coleta em andamento continua na execu\xE7\xE3o seguinte)";
 async function cli() {
   console.log(`DataDash \xB7 automa\xE7\xE3o vers\xE3o ${VERSAO_AUTOMACAO}`);
   let args = process.argv.slice(2), val = (k) => {
