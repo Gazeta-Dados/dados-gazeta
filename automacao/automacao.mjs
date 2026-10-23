@@ -15093,6 +15093,949 @@ var init_publish = __esm({
   }
 });
 
+// automation/conferir.ts
+var conferir_exports = {};
+__export(conferir_exports, {
+  conferirConjuntos: () => conferirConjuntos,
+  relatorioConferencia: () => relatorioConferencia
+});
+function sugerir(arquivos) {
+  let dados = arquivos.filter((a) => /^(csv|json|zip|xlsx?|txt)$/i.test(a.formato) || /\.(csv|json|zip|xlsx?)(\?|$)/i.test(a.url));
+  if (!dados.length) return "Nenhum arquivo de dados (CSV, JSON, ZIP ou Excel) no conjunto.";
+  let comAno = dados.filter((a) => a.ano !== null), anos = new Set(comAno.map((a) => a.ano));
+  return comAno.length >= 2 && anos.size === comAno.length && comAno.length >= dados.length - 1 ? `Um arquivo por ano (${Math.min(...anos)}\u2013${Math.max(...anos)}): use "Juntar todos os arquivos".` : dados.length === 1 ? "Um \xFAnico arquivo: n\xE3o \xE9 preciso juntar." : `${dados.length} arquivos de assuntos diferentes: cadastre uma fonte para cada, com a parte do nome do arquivo.`;
+}
+async function conferirConjuntos(itens, fetcher) {
+  let vistos = /* @__PURE__ */ new Set(), res = [];
+  for (let it of itens) {
+    let chave = `${it.portal}|${it.conjunto}`;
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    let base = { id: it.id, nome: it.nome, conjunto: it.conjunto, portal: it.portal, arquivos: [] };
+    try {
+      let api = `${it.portal.replace(/\/$/, "")}/api/3/action/package_show?id=${encodeURIComponent(it.conjunto)}`, r = await fetcher(api, { totalMs: 6e4 }), json = null;
+      try {
+        json = JSON.parse(r.body.toString("utf-8"));
+      } catch {
+      }
+      if (r.status === 404 || json && json.success === !1) {
+        res.push({ ...base, situacao: "nao_encontrado" });
+        continue;
+      }
+      if (r.status >= 400 || !json?.result) {
+        res.push({ ...base, situacao: "erro", erro: `o portal respondeu HTTP ${r.status}` });
+        continue;
+      }
+      let arquivos = (json.result.resources || []).map((x) => ({
+        nome: String(x.name || String(x.url || "").split("/").pop() || "?"),
+        formato: String(x.format || "").toUpperCase(),
+        ano: anoDe2(String(x.name || "")) ?? anoDe2(String(x.url || "")),
+        tamanhoMB: typeof x.size == "number" && x.size > 0 ? Math.round(x.size / 1048576 * 10) / 10 : null,
+        atualizado: String(x.last_modified || x.metadata_modified || x.created || "").slice(0, 10),
+        url: String(x.url || "")
+      })).sort((a, b) => (a.ano ?? 9999) - (b.ano ?? 9999) || a.nome.localeCompare(b.nome));
+      res.push({ ...base, situacao: "existe", titulo: json.result.title, arquivos, sugestao: sugerir(arquivos) });
+    } catch (e) {
+      res.push({ ...base, situacao: "erro", erro: String(e?.message || e) });
+    }
+  }
+  return res;
+}
+function relatorioConferencia(res, quando) {
+  let esc2 = (s) => s.replace(/\|/g, "/").replace(/\n/g, " "), ok = res.filter((r) => r.situacao === "existe").length, linhas = [
+    "## Confer\xEAncia do cat\xE1logo de fontes",
+    "",
+    `${quando.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} \xB7 ${res.length} ${res.length === 1 ? "conjunto consultado" : "conjuntos consultados"} \xB7 encontrados: ${ok} \xB7 n\xE3o encontrados: ${res.filter((r) => r.situacao === "nao_encontrado").length} \xB7 com erro: ${res.filter((r) => r.situacao === "erro").length}`,
+    ""
+  ];
+  for (let r of res) {
+    if (r.situacao === "nao_encontrado") {
+      linhas.push(`### \u274C ${esc2(r.nome)}`, "", `Conjunto **${r.conjunto}** n\xE3o encontrado no portal. Confira o endere\xE7o.`, "");
+      continue;
+    }
+    if (r.situacao === "erro") {
+      linhas.push(`### \u26A0\uFE0F ${esc2(r.nome)}`, "", `N\xE3o foi poss\xEDvel consultar **${r.conjunto}**: ${esc2(r.erro || "")}`, "");
+      continue;
+    }
+    linhas.push(`### \u2705 ${esc2(r.nome)}`, "", `Conjunto **${r.conjunto}**${r.titulo ? ` (\u201C${esc2(r.titulo)}\u201D)` : ""}. ${r.sugestao}`, ""), linhas.push("| Arquivo | Formato | Ano | Tamanho | Atualizado |", "|---|---|---|---|---|");
+    for (let a of r.arquivos.slice(0, 40))
+      linhas.push(`| ${esc2(a.nome)} | ${a.formato || "\u2014"} | ${a.ano ?? "\u2014"} | ${a.tamanhoMB !== null ? `${String(a.tamanhoMB).replace(".", ",")} MB` : "\u2014"} | ${a.atualizado || "\u2014"} |`);
+    r.arquivos.length > 40 && linhas.push(`| \u2026 e mais ${r.arquivos.length - 40} arquivos | | | | |`), linhas.push("");
+  }
+  return linhas.join(`
+`);
+}
+var anoDe2, init_conferir = __esm({
+  "automation/conferir.ts"() {
+    anoDe2 = (s) => {
+      let m = s.match(/(?:^|\D)(19\d{2}|20\d{2})(?:\D|$)/);
+      return m ? Number(m[1]) : null;
+    };
+  }
+});
+
+// src/lib/apiCatalog.ts
+var apiCatalog_exports = {};
+__export(apiCatalog_exports, {
+  PUBLIC_API_CATALOG: () => PUBLIC_API_CATALOG,
+  conjuntosDoCatalogo: () => conjuntosDoCatalogo
+});
+function palavraChaveDoArquivo(arquivo) {
+  let MESES = /* @__PURE__ */ new Set(["jan", "fev", "feb", "mar", "abr", "apr", "mai", "may", "jun", "jul", "ago", "aug", "set", "sep", "out", "oct", "nov", "dez", "dec"]), SIGLAS = /* @__PURE__ */ new Set(["subeo", "getad", "seger", "sep", "ge", "es", "loa", "csv", "json", "zip", "xlsx", "xls"]);
+  return decodeURIComponent(arquivo).toLowerCase().split(/[^a-z0-9à-ú]+/).filter((w) => w && !/^\d+$/.test(w) && !MESES.has(w) && !SIGLAS.has(w)).slice(0, 2).join("-");
+}
+function revisar(item) {
+  let r = REVISAO[item.id];
+  if (r === null) return null;
+  let avisos = [], base = { ...item, verificacao: "nao_verificado", importavelNoApp: !0 }, m = item.url.match(/^https:\/\/dados\.es\.gov\.br\/dataset\/([^/]+)\/resource\/[^/]+\/download\/([^/?#]+)$/);
+  if (m) {
+    let formato = (m[2].match(/\.(csv|json|zip|xlsx)$/i) || [])[1]?.toLowerCase();
+    base.pagina = `https://dados.es.gov.br/dataset/${m[1]}`, base.ckan = { portal: "https://dados.es.gov.br", conjunto: m[1], recurso: palavraChaveDoArquivo(m[2]), ...formato ? { formato } : {}, combinar: !1 }, /(19|20)\d{2}/.test(m[2]) && avisos.push("O endere\xE7o aponta para um arquivo de data fixa: importado no app, n\xE3o acompanha os anos seguintes. Como fonte autom\xE1tica, a busca \xE9 feita no conjunto do portal.");
+  }
+  let final = { ...base, ...r || {} };
+  return final.avisos = [...avisos, ...r && r.avisos || [], ...final.verificacao === "nao_verificado" ? [NAO_VERIFICADO] : []], final;
+}
+function conjuntosDoCatalogo() {
+  return PUBLIC_API_CATALOG.filter((x) => x.ckan).map((x) => ({ id: x.id, nome: x.shortTitle, portal: x.ckan.portal, conjunto: x.ckan.conjunto, verificacao: x.verificacao }));
+}
+var CATALOGO_ORIGINAL, NAO_VERIFICADO, REVISAO, ORIGEM_LISTA, LINK_CONFERIDO, ckanES, LINK_CONFERIDO_AREA, portalES, CATALOGO_ACRESCIMOS, PUBLIC_API_CATALOG, init_apiCatalog = __esm({
+  "src/lib/apiCatalog.ts"() {
+    CATALOGO_ORIGINAL = [
+      // ==========================================
+      // GOVERNO DO ESTADO DO ESPÍRITO SANTO (SEFAZ / SEP / TRANSPARÊNCIA ES)
+      // ==========================================
+      {
+        id: "es_receitas_arrecadadas",
+        name: "Receitas Arrecadadas e Realizadas do Estado do ES (Portal da Transpar\xEAncia / SEFAZ)",
+        shortTitle: "Receitas Arrecadadas do ES (SEFAZ)",
+        category: "Receitas do Estado",
+        sphere: "es_estadual",
+        source: "Portal da Transpar\xEAncia ES / SEFAZ (portal-da-transparencia-receitas7)",
+        url: "https://dados.es.gov.br/dataset/portal-da-transparencia-receitas7",
+        format: "CSV",
+        description: "Arrecada\xE7\xE3o e realiza\xE7\xE3o de receitas tribut\xE1rias (ICMS, IPVA, ITCMD, taxas e repasses constitucionais) da SEFAZ m\xEAs a m\xEAs.",
+        columnsPreview: ["codigoUG", "descricaoUG", "descricaoNatureza", "descricaoCategoria", "descricaoOrigem", "valorPrevista", "valorArrecadada", "valorRecolhida", "valorPrevistaLiquida", "valorArrecadadaLiquida", "ano", "dataContabilizacao"],
+        yearsPreview: "2023 a 2026 (Mensal / Anual)",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal (ap\xF3s apura\xE7\xE3o do fechamento cont\xE1bil da SEFAZ)",
+        suggestedName: "Governo ES - Receitas Realizadas SEFAZ",
+        tags: ["receitas", "arrecada\xE7\xE3o", "sefaz", "impostos", "icms", "ipva", "tributos"]
+      },
+      {
+        id: "es_receitas_loa",
+        name: "Receitas Or\xE7ament\xE1rias do Estado do ES (Previs\xE3o LOA & Execu\xE7\xE3o)",
+        shortTitle: "Receitas Or\xE7ament\xE1rias do ES (LOA)",
+        category: "Receitas do Estado",
+        sphere: "es_estadual",
+        source: "Portal de Transpar\xEAncia ES / SEFAZ-SEP",
+        url: "https://dados.es.gov.br/dataset/d0a090d4-4a50-443d-84cc-aca6ac3d321c/resource/0ca05e19-afe1-4cbb-82cc-78614948aa4f/download/10.-sep-2025-receita-orcamentaria-loa-subeo-19.05.2026.csv",
+        format: "CSV",
+        description: "Previs\xE3o bruta e l\xEDquida de arrecada\xE7\xE3o de tributos e receitas estaduais por \xD3rg\xE3o, Unidade Gestora, Fonte e Natureza de Receita.",
+        columnsPreview: ["\xD3rg\xE3o da UG", "UG", "Fonte", "Categoria da Receita", "Natureza da Receita", "Previs\xE3o Inicial L\xEDquida"],
+        yearsPreview: "2024 e 2025 (LOA)",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual (em maio na consolida\xE7\xE3o da LOA) ou Mensal",
+        suggestedName: "Governo ES - Receitas Or\xE7ament\xE1rias LOA",
+        tags: ["receitas", "arrecada\xE7\xE3o", "sefaz", "impostos", "loa", "or\xE7amento"]
+      },
+      {
+        id: "es_despesas_execucoes",
+        name: "Execu\xE7\xE3o de Despesas do Estado por Unidade Gestora (Empenhos, Liquida\xE7\xF5es e Pagamentos)",
+        shortTitle: "Execu\xE7\xE3o de Despesas do ES (Resumo UG)",
+        category: "Despesas do Estado",
+        sphere: "es_estadual",
+        source: "Portal da Transpar\xEAncia do ES",
+        url: "https://dados.es.gov.br/dataset/99e16b13-0e6f-4504-8544-00de842ab1fd/resource/538b6477-dbc6-4183-9b73-adcc18867369/download/orcamentosexecucoes-2025.csv",
+        format: "CSV",
+        description: "Valores mensais de empenhos, liquida\xE7\xF5es, pagamentos e valores or\xE7ados de todos os \xF3rg\xE3os e secretarias do Governo do Estado.",
+        columnsPreview: ["Data", "ValorEmpenho", "ValorLiquidado", "ValorPago", "ValorRap", "ValorOrcadoInicial", "ValorOrcado", "UnidadeGestora", "SiglaUnidadeGestora"],
+        yearsPreview: "2024 a 2026",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal (ap\xF3s fechamento cont\xE1bil dia 10)",
+        suggestedName: "Governo ES - Execu\xE7\xE3o das Despesas",
+        tags: ["empenho", "liquida\xE7\xE3o", "pagamentos", "execu\xE7\xE3o", "despesas", "secretarias"]
+      },
+      {
+        id: "es_despesas_detalhadas",
+        name: "Despesas Detalhadas do Estado por Favorecido, Fun\xE7\xE3o e Programa (Portal da Transpar\xEAncia)",
+        shortTitle: "Despesas Detalhadas do ES (Favorecidos)",
+        category: "Despesas do Estado",
+        sphere: "es_estadual",
+        source: "Portal da Transpar\xEAncia do ES",
+        url: "https://dados.es.gov.br/dataset/99e16b13-0e6f-4504-8544-00de842ab1fd/resource/b9c229f8-884c-4fa6-85a9-15469172d6a8/download/despesas-2025.csv",
+        format: "CSV",
+        description: "Rela\xE7\xE3o completa de empenhos, liquida\xE7\xF5es e ordens banc\xE1rias pagas com nome/CNPJ do favorecido, a\xE7\xE3o e elemento de despesa.",
+        columnsPreview: ["Ano", "Data", "ValorEmpenho", "ValorLiquidado", "ValorPago", "Favorecido", "Orgao", "Funcao", "SubFuncao", "Programa", "ElementoDespesa"],
+        yearsPreview: "2024 e 2025 (Execu\xE7\xE3o Cont\xEDnua)",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Governo ES - Despesas por Favorecido",
+        tags: ["favorecido", "fornecedores", "pagamentos", "despesas", "programas"]
+      },
+      {
+        id: "es_despesas_orcamento",
+        name: "Or\xE7amento de Despesas do Estado do Esp\xEDrito Santo (Dota\xE7\xF5es LOA)",
+        shortTitle: "Or\xE7amento de Despesas do ES (Dota\xE7\xF5es)",
+        category: "Despesas do Estado",
+        sphere: "es_estadual",
+        source: "Portal da Transpar\xEAncia do ES",
+        url: "https://dados.es.gov.br/dataset/99e16b13-0e6f-4504-8544-00de842ab1fd/resource/c98132b7-a2ce-431f-be7b-1ba5998a62b9/download/orcamentosdespesa-2025.csv",
+        format: "CSV",
+        description: "Dota\xE7\xF5es or\xE7ament\xE1rias iniciais e atualizadas por Secretaria, Fun\xE7\xE3o, Subfun\xE7\xE3o e Programa Governamental.",
+        columnsPreview: ["Ano", "\xD3rg\xE3o", "Unidade Or\xE7ament\xE1ria", "Fun\xE7\xE3o", "Subfun\xE7\xE3o", "Programa", "Dota\xE7\xE3o Inicial", "Dota\xE7\xE3o Atualizada"],
+        yearsPreview: "2024 e 2025",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal (acompanhamento de altera\xE7\xF5es or\xE7ament\xE1rias)",
+        suggestedName: "Governo ES - Or\xE7amento de Despesas",
+        tags: ["despesas", "or\xE7amento", "fun\xE7\xF5es", "secretarias", "dota\xE7\xE3o"]
+      },
+      {
+        id: "es_divida_ativa",
+        name: "D\xEDvida Ativa do Estado do Esp\xEDrito Santo (SEFAZ / PGE)",
+        shortTitle: "D\xEDvida Ativa Estadual (SEFAZ)",
+        category: "Receitas do Estado",
+        sphere: "es_estadual",
+        source: "SEFAZ-ES / Portal da Transpar\xEAncia",
+        url: "https://dados.es.gov.br/dataset/3210df25-0dfe-414b-aed4-844ddcdf87bb/resource/016bbc36-15fb-476b-b249-d9726426c82c/download/dividaativa.csv",
+        format: "CSV",
+        description: "Cr\xE9ditos tribut\xE1rios e n\xE3o-tribut\xE1rios inscritos em D\xEDvida Ativa a serem recuperados pelo Estado.",
+        columnsPreview: ["Ano", "NumeroInscricao", "NaturezaTributaria", "ValorTotal", "Situacao", "UnidadeInscricao"],
+        yearsPreview: "2020 a 2025",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal ou Semestral",
+        suggestedName: "Governo ES - D\xEDvida Ativa",
+        tags: ["d\xEDvida ativa", "sefaz", "pge", "cr\xE9ditos", "arrecada\xE7\xE3o"]
+      },
+      {
+        id: "es_convenios_estado",
+        name: "Conv\xEAnios e Repasses de Recursos do Estado do ES",
+        shortTitle: "Conv\xEAnios e Repasses Estaduais",
+        category: "Receitas e Repasses",
+        sphere: "es_estadual",
+        source: "Portal da Transpar\xEAncia do ES",
+        url: "https://dados.es.gov.br/dataset/577b5d48-3770-4b5c-8202-384d969b40fb/resource/d23575f9-af45-4306-a4b1-4a4dcaf74cfa/download/conveniosexecucaoorcamentaria-2025.csv",
+        format: "CSV",
+        description: "Transfer\xEAncias volunt\xE1rias e conv\xEAnios firmados com prefeituras capixabas e entidades civis.",
+        columnsPreview: ["N\xFAmero Conv\xEAnio", "Concedente", "Proponente", "Objeto", "Valor Conv\xEAnio", "Valor Liberado"],
+        yearsPreview: "2024 a 2026",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Governo ES - Conv\xEAnios e Repasses",
+        tags: ["conv\xEAnios", "repasses", "prefeituras", "transfer\xEAncias"]
+      },
+      {
+        id: "es_indicadores_estrategicos",
+        name: "Metas e Indicadores Estrat\xE9gicos das Secretarias do ES",
+        shortTitle: "Indicadores Estrat\xE9gicos do ES",
+        category: "Gest\xE3o e Metas",
+        sphere: "es_estadual",
+        source: "SEP / Governo do ES",
+        url: "https://dados.es.gov.br/dataset/83a6fb14-7820-448b-9b4f-45a23ad30209/resource/3290f262-14e2-4ecd-ae51-b9f15db9a3f0/download/6.-sep-2025-indicadores-estrategicos-subeo-11.06.2026.csv",
+        format: "CSV",
+        description: "Acompanhamento de metas do Plano Plurianual (PPA) e programas estrat\xE9gicos do governo capixaba.",
+        columnsPreview: ["Secretaria", "Programa", "Indicador", "Meta Prevista", "Realizado", "Percentual Atingido"],
+        yearsPreview: "2024 e 2025",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal ou Trimestral",
+        suggestedName: "Governo ES - Indicadores Estrat\xE9gicos",
+        tags: ["metas", "indicadores", "planejamento", "ppa", "resultados"]
+      },
+      {
+        id: "es_veiculos_oficiais",
+        name: "Frota Oficial de Ve\xEDculos da Administra\xE7\xE3o Estadual",
+        shortTitle: "Ve\xEDculos Oficiais do Estado",
+        category: "Patrim\xF4nio e Gest\xE3o",
+        sphere: "es_estadual",
+        source: "SEP / GETAD",
+        url: "https://dados.es.gov.br/dataset/535b4513-5317-42f7-89f5-a9aef871c5ef/resource/dff68bfb-cdb2-4f33-b4a1-aaacc938c97d/download/4.-sep-2025-veiculos-oficiais-getad-14.05.2026.csv",
+        format: "CSV",
+        description: "Rela\xE7\xE3o de todos os ve\xEDculos oficiais em opera\xE7\xE3o nos \xF3rg\xE3os do Estado do Esp\xEDrito Santo.",
+        columnsPreview: ["\xD3rg\xE3o", "Placa", "Marca/Modelo", "Ano Fabrica\xE7\xE3o", "Combust\xEDvel", "Situa\xE7\xE3o"],
+        yearsPreview: "2024 e 2025",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Governo ES - Frota de Ve\xEDculos",
+        tags: ["ve\xEDculos", "patrim\xF4nio", "frota", "transportes"]
+      },
+      {
+        id: "es_terceirizados",
+        name: "Prestadores de Servi\xE7os Terceirizados no Estado do ES",
+        shortTitle: "Servidores Terceirizados do ES",
+        category: "Gest\xE3o e Pessoal",
+        sphere: "es_estadual",
+        source: "SEP / GETAD",
+        url: "https://dados.es.gov.br/dataset/768762f9-e9c1-445e-95c5-754f48fa216f/resource/2a08571a-6aeb-4734-88de-2ce926e4ffc8/download/3.-sep-2025-servidores-terceirizados-getad-14.05.2026.csv",
+        format: "CSV",
+        description: "Contratos e quantitativo de colaboradores terceirizados ativos na administra\xE7\xE3o p\xFAblica estadual.",
+        columnsPreview: ["\xD3rg\xE3o", "Empresa Contratada", "Cargo/Fun\xE7\xE3o", "Quantitativo", "Valor Mensal"],
+        yearsPreview: "2024 e 2025",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Governo ES - Prestadores Terceirizados",
+        tags: ["terceirizados", "pessoal", "contratos", "servidores"]
+      },
+      // ==========================================
+      // MUNICÍPIOS DO ESPÍRITO SANTO (TCE-ES / CidadES)
+      // ==========================================
+      {
+        id: "tce_rcl_municipios",
+        name: "Receita Corrente L\xEDquida (RCL) dos 78 Munic\xEDpios do ES",
+        shortTitle: "Receita Corrente L\xEDquida dos Munic\xEDpios (TCE-ES)",
+        category: "Receitas dos Munic\xEDpios",
+        sphere: "es_municipal",
+        source: "TCE-ES (Tribunal de Contas) / CidadES",
+        url: "https://dados.es.gov.br/dataset/c2d74fcf-5163-463c-9f5a-48e0e082c1b3/resource/4bbc4025-d96f-437d-837f-acc1089e5fa5/download/rcl.csv",
+        format: "CSV",
+        description: "S\xE9rie hist\xF3rica oficial da Receita Corrente L\xEDquida (RCL) de todos os 78 munic\xEDpios capixabas auditada pelo Tribunal de Contas.",
+        columnsPreview: ["Ano", "Mes", "Munic\xEDpio", "Receita Corrente Liquida", "Receita Corrente Liquida Ajustada Pessoal"],
+        yearsPreview: "2018 a 2025 (Todos os anos)",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal (acompanhamento cont\xE1bil do TCE-ES)",
+        suggestedName: "TCE-ES - Receita Corrente L\xEDquida dos Munic\xEDpios",
+        tags: ["munic\xEDpios", "receitas", "tce-es", "rcl", "cidades", "arrecada\xE7\xE3o"]
+      },
+      {
+        id: "tce_despesas_saude_municipios",
+        name: "Gastos dos Munic\xEDpios Capixabas com Sa\xFAde (TCE-ES)",
+        shortTitle: "Gastos dos Munic\xEDpios com Sa\xFAde",
+        category: "Despesas dos Munic\xEDpios",
+        sphere: "es_municipal",
+        source: "TCE-ES (Tribunal de Contas) / CidadES",
+        url: "https://dados.es.gov.br/dataset/c2d74fcf-5163-463c-9f5a-48e0e082c1b3/resource/f472ae45-a039-4d10-b029-fe6a2367b2a6/download/municipios-saude.csv",
+        format: "CSV",
+        description: "Valores liquidados em a\xE7\xF5es e servi\xE7os p\xFAblicos de sa\xFAde em cada um dos 78 munic\xEDpios do ES e cumprimento do m\xEDnimo constitucional.",
+        columnsPreview: ["Ano", "Mes", "Munic\xEDpio", "Despesa com Sa\xFAde", "Percentual Aplicado", "Limite M\xEDnimo Constitucional"],
+        yearsPreview: "2018 a 2025",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "TCE-ES - Gastos dos Munic\xEDpios com Sa\xFAde",
+        tags: ["sa\xFAde", "munic\xEDpios", "tce-es", "despesas", "sus"]
+      },
+      {
+        id: "tce_despesas_educacao_municipios",
+        name: "Gastos dos Munic\xEDpios Capixabas com Educa\xE7\xE3o (TCE-ES)",
+        shortTitle: "Gastos dos Munic\xEDpios com Educa\xE7\xE3o",
+        category: "Despesas dos Munic\xEDpios",
+        sphere: "es_municipal",
+        source: "TCE-ES (Tribunal de Contas) / CidadES",
+        url: "https://dados.es.gov.br/dataset/c2d74fcf-5163-463c-9f5a-48e0e082c1b3/resource/015c1dad-5842-44e8-a307-68eafe6de28e/download/municipios-educacao.csv",
+        format: "CSV",
+        description: "Investimento em Manuten\xE7\xE3o e Desenvolvimento do Ensino (MDE) e Fundeb realizado pelos 78 munic\xEDpios capixabas.",
+        columnsPreview: ["Ano", "Mes", "Munic\xEDpio", "Despesa com Educa\xE7\xE3o", "MDE", "Fundeb", "Percentual Aplicado"],
+        yearsPreview: "2018 a 2025",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "TCE-ES - Gastos dos Munic\xEDpios com Educa\xE7\xE3o",
+        tags: ["educa\xE7\xE3o", "munic\xEDpios", "tce-es", "mde", "fundeb", "escolas"]
+      },
+      {
+        id: "tce_despesas_pessoal_municipios",
+        name: "Gastos com Folha de Pessoal dos Munic\xEDpios do ES (LRF)",
+        shortTitle: "Gastos com Pessoal dos Munic\xEDpios (LRF)",
+        category: "Despesas dos Munic\xEDpios",
+        sphere: "es_municipal",
+        source: "TCE-ES (Tribunal de Contas) / CidadES",
+        url: "https://dados.es.gov.br/dataset/c2d74fcf-5163-463c-9f5a-48e0e082c1b3/resource/45c257a8-5b35-4486-af5c-5bfbc453304a/download/municipios-pessoal.csv",
+        format: "CSV",
+        description: "Despesa Total com Pessoal (DTP) de cada prefeitura e c\xE2mara municipal frente ao limite legal da Lei de Responsabilidade Fiscal (54%).",
+        columnsPreview: ["Ano", "Mes", "Munic\xEDpio", "Despesa Total Pessoal", "Percentual sobre RCL", "Limite M\xE1ximo LRF"],
+        yearsPreview: "2018 a 2025",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal ou Quadrimestral",
+        suggestedName: "TCE-ES - Despesas com Pessoal dos Munic\xEDpios",
+        tags: ["pessoal", "folha", "munic\xEDpios", "lrf", "tce-es", "servidores"]
+      },
+      {
+        id: "tce_endividamento_municipios",
+        name: "D\xEDvida Consolidada e Endividamento dos Munic\xEDpios do ES",
+        shortTitle: "Endividamento dos Munic\xEDpios (TCE-ES)",
+        category: "Finan\xE7as dos Munic\xEDpios",
+        sphere: "es_municipal",
+        source: "TCE-ES (Tribunal de Contas) / CidadES",
+        url: "https://dados.es.gov.br/dataset/c2d74fcf-5163-463c-9f5a-48e0e082c1b3/resource/359ca7d9-dea6-4741-a137-210b2cb63961/download/endividamento.csv",
+        format: "CSV",
+        description: "D\xEDvida Consolidada L\xEDquida (DCL) e opera\xE7\xF5es de cr\xE9dito vigentes de cada munic\xEDpio do Esp\xEDrito Santo.",
+        columnsPreview: ["Ano", "Mes", "Munic\xEDpio", "D\xEDvida Consolidada", "DCL", "Percentual Endividamento"],
+        yearsPreview: "2018 a 2025",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "TCE-ES - Endividamento dos Munic\xEDpios",
+        tags: ["d\xEDvida", "endividamento", "cr\xE9dito", "munic\xEDpios", "tce-es"]
+      },
+      // ==========================================
+      // GOVERNO FEDERAL (TESOURO NACIONAL / SICONFI / IBGE / BANCO CENTRAL)
+      // ==========================================
+      {
+        id: "fed_siconfi_dca_es",
+        name: "Tesouro Nacional / SICONFI: Balan\xE7o Anual das Prefeituras do ES (DCA)",
+        shortTitle: "Tesouro Nacional: Contas dos Munic\xEDpios do ES",
+        category: "Finan\xE7as P\xFAblicas Federais",
+        sphere: "federal",
+        source: "Tesouro Nacional / SICONFI API",
+        url: "https://apidatalake.tesouro.gov.br/ords/siconfi/tt/dca?an_exercicio=2024&id_ente=32",
+        format: "JSON",
+        jsonPath: "items",
+        description: "Declara\xE7\xE3o de Contas Anuais (DCA) oficial com balan\xE7os patrimoniais e or\xE7ament\xE1rios de todos os entes do Esp\xEDrito Santo.",
+        columnsPreview: ["exercicio", "cod_ibge", "instituicao", "conta", "coluna", "valor"],
+        yearsPreview: "2023 e 2024",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual (ap\xF3s entrega das contas ao Tesouro)",
+        suggestedName: "Tesouro Nacional - Contas Anuais dos Munic\xEDpios do ES",
+        tags: ["siconfi", "tesouro nacional", "balan\xE7o", "munic\xEDpios", "contabilidade"]
+      },
+      {
+        id: "fed_ibge_municipios_es",
+        name: "IBGE: Estrutura Geogr\xE1fica e Microrregi\xF5es dos 78 Munic\xEDpios do ES",
+        shortTitle: "IBGE: 78 Munic\xEDpios do Esp\xEDrito Santo",
+        category: "Demografia e Territ\xF3rio",
+        sphere: "federal",
+        source: "IBGE Localidades API",
+        url: "https://servicodados.ibge.gov.br/api/v1/localidades/estados/32/municipios",
+        format: "JSON",
+        description: "Rela\xE7\xE3o oficial do IBGE com c\xF3digos, mesorregi\xF5es, microrregi\xF5es e regi\xF5es imediatas de todos os 78 munic\xEDpios capixabas.",
+        columnsPreview: ["id (C\xF3digo IBGE)", "nome (Munic\xEDpio)", "microrregiao", "mesorregiao"],
+        yearsPreview: "2024 a 2026",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "IBGE - Munic\xEDpios do Esp\xEDrito Santo",
+        tags: ["ibge", "munic\xEDpios", "cidades", "es", "mapa", "popula\xE7\xE3o"]
+      },
+      {
+        id: "fed_ibge_noticias",
+        name: "IBGE: Not\xEDcias Econ\xF4micas, Infla\xE7\xE3o e Estat\xEDsticas Oficiais",
+        shortTitle: "IBGE: Not\xEDcias e Comunicados",
+        category: "Not\xEDcias & Estat\xEDsticas",
+        sphere: "federal",
+        source: "IBGE Not\xEDcias API",
+        url: "https://servicodados.ibge.gov.br/api/v3/noticias/?qtd=50",
+        format: "JSON",
+        jsonPath: "items",
+        description: "Divulga\xE7\xF5es oficiais sobre PIB, infla\xE7\xE3o (IPCA/INPC), taxa de desemprego (PNAD Cont\xEDnua) e pesquisas setoriais do IBGE.",
+        columnsPreview: ["id", "titulo", "introducao", "data_publicacao", "editorias", "link"],
+        yearsPreview: "2025 e 2026",
+        recommendedSchedule: "24h",
+        recommendedScheduleDesc: "Di\xE1ria (a cada 24 horas)",
+        suggestedName: "IBGE - Not\xEDcias e Estat\xEDsticas Nacionais",
+        tags: ["ibge", "not\xEDcias", "economia", "pib", "infla\xE7\xE3o", "comunicados"]
+      },
+      {
+        id: "fed_bcb_ptax",
+        name: "Banco Central do Brasil: Cota\xE7\xE3o Oficial Di\xE1ria do D\xF3lar (PTAX)",
+        shortTitle: "Banco Central: C\xE2mbio D\xF3lar PTAX",
+        category: "Macroeconomia e C\xE2mbio",
+        sphere: "federal",
+        source: "Banco Central do Brasil (BCB OData API)",
+        url: "https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoDolarDia(dataCotacao=@dataCotacao)?@dataCotacao='10-16-2026'&$top=100&$format=json",
+        format: "JSON",
+        jsonPath: "value",
+        description: "Taxa de c\xE2mbio oficial de compra e venda apurada pelo Banco Central para fechamento de balan\xE7os e contratos internacionais.",
+        columnsPreview: ["cotacaoCompra", "cotacaoVenda", "dataHoraCotacao"],
+        yearsPreview: "2026",
+        recommendedSchedule: "24h",
+        recommendedScheduleDesc: "Di\xE1ria (fechamento de mercado \xE0s 17h)",
+        suggestedName: "Banco Central - D\xF3lar Comercial PTAX",
+        tags: ["d\xF3lar", "c\xE2mbio", "ptax", "banco central", "moeda"]
+      },
+      {
+        id: "fed_bcb_selic",
+        name: "Banco Central do Brasil: Hist\xF3rico da Taxa de Juros Selic (SGS)",
+        shortTitle: "Banco Central: Taxa Selic Di\xE1ria",
+        category: "Macroeconomia e Juros",
+        sphere: "federal",
+        source: "Banco Central do Brasil (SGS)",
+        url: "https://api.bcb.gov.br/dados/serie/bcdata.sgs.11/dados/ultimos/30?formato=json",
+        format: "JSON",
+        description: "S\xE9rie temporal di\xE1ria da taxa de juros b\xE1sica da economia brasileira (Selic Over).",
+        columnsPreview: ["data", "valor (Taxa Selic % a.a.)"],
+        yearsPreview: "2025 e 2026",
+        recommendedSchedule: "24h",
+        recommendedScheduleDesc: "Di\xE1ria",
+        suggestedName: "Banco Central - Taxa Selic",
+        tags: ["selic", "juros", "banco central", "economia", "sgs"]
+      },
+      {
+        id: "fed_bcb_ipca",
+        name: "Banco Central do Brasil: \xCDndice Oficial de Infla\xE7\xE3o IPCA Mensal",
+        shortTitle: "Banco Central: Infla\xE7\xE3o IPCA Mensal",
+        category: "Macroeconomia e Infla\xE7\xE3o",
+        sphere: "federal",
+        source: "Banco Central do Brasil (SGS)",
+        url: "https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/24?formato=json",
+        format: "JSON",
+        description: "Varia\xE7\xE3o percentual mensal do IPCA (\xCDndice Nacional de Pre\xE7os ao Consumidor Amplo) apurado pelo IBGE e catalogado pelo BCB.",
+        columnsPreview: ["data", "valor (Varia\xE7\xE3o % mensal do IPCA)"],
+        yearsPreview: "2024 a 2026",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal (divulga\xE7\xE3o dia 10 de cada m\xEAs)",
+        suggestedName: "Banco Central - Infla\xE7\xE3o IPCA Mensal",
+        tags: ["ipca", "infla\xE7\xE3o", "pre\xE7os", "banco central", "economia"]
+      }
+    ], NAO_VERIFICADO = "Sugest\xE3o gerada automaticamente e ainda n\xE3o conferida: abra a p\xE1gina do portal e confira se o arquivo existe, de quando \xE9 e quais colunas tem antes de usar.", REVISAO = {
+      // Conferido: a coleta automática real funcionou com este conjunto em 22/10/2026
+      es_receitas_arrecadadas: {
+        name: "Receitas do Estado do ES (Portal da Transpar\xEAncia / SEFAZ)",
+        source: "Portal da Transpar\xEAncia do Governo do ES (dados.es.gov.br)",
+        url: "https://dados.es.gov.br/dataset/portal-da-transparencia-receitas",
+        pagina: "https://dados.es.gov.br/dataset/portal-da-transparencia-receitas",
+        ckan: { portal: "https://dados.es.gov.br", conjunto: "portal-da-transparencia-receitas", recurso: "receitas", formato: "csv", combinar: !0 },
+        importavelNoApp: !1,
+        verificacao: "verificado",
+        verificadoEm: "22/10/2026",
+        columnsPreview: ["CodUnidadeGestora", "UnidadeGestora", "Ano", "Mes", "CategoriaEconomica", "Origem", "Especie", "Rubrica", "Fonte", "TipoArquivo", "PrevistaBruta", "ArrecadadaBruta", "ArrecadadaDeducao", "ArrecadadaLiquida", "RecolhidaBruta", "\u2026 (56 colunas)"],
+        yearsPreview: "2019 em diante (um arquivo por ano)",
+        avisos: [
+          "Um arquivo CSV por ano, de 150 MB a 1 GB, com uma linha por lan\xE7amento: grande demais para importar no app. Use como fonte autom\xE1tica, somando por categorias.",
+          "Cada lan\xE7amento preenche s\xF3 a coluna do seu tipo (TipoArquivo). Defina com a editoria qual medida publicar (arrecadada bruta, dedu\xE7\xF5es ou l\xEDquida) e confira um total mensal com o relat\xF3rio da SEFAZ."
+        ]
+      },
+      // Os 5 itens do TCE-ES do catálogo original ERAM REAIS: os códigos dos arquivos são os mesmos
+      // dos links conferidos pela redação. Foram substituídos pelos itens "tce_municipios_*" (um por
+      // área), que usam esses mesmos endereços; aqui saem só para não duplicar.
+      tce_rcl_municipios: null,
+      tce_despesas_saude_municipios: null,
+      tce_despesas_educacao_municipios: null,
+      tce_despesas_pessoal_municipios: null,
+      tce_endividamento_municipios: null,
+      fed_siconfi_dca_es: {
+        name: "Tesouro Nacional / SICONFI: Balan\xE7o Anual do Estado do ES (DCA)",
+        shortTitle: "Balan\xE7o anual do Estado (SICONFI/DCA)",
+        url: "https://apidatalake.tesouro.gov.br/ords/siconfi/tt/dca?an_exercicio={{PREV_YYYY}}&id_ente=32",
+        avisos: ["O c\xF3digo id_ente=32 \xE9 o do Estado do Esp\xEDrito Santo (n\xE3o das prefeituras). Cada munic\xEDpio tem o pr\xF3prio c\xF3digo do IBGE.", "Usa o ano anterior ({{PREV_YYYY}}): o balan\xE7o do ano s\xF3 sai no ano seguinte."]
+      },
+      fed_ibge_noticias: { avisos: ["S\xE3o not\xEDcias do IBGE, n\xE3o uma s\xE9rie estat\xEDstica: n\xE3o servem como base de dados para pain\xE9is."] },
+      fed_bcb_ptax: {
+        url: "https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoDolarPeriodo(dataInicial=@dataInicial,dataFinalCotacao=@dataFinalCotacao)?@dataInicial='01-01-{{YYYY}}'&@dataFinalCotacao='12-31-{{YYYY}}'&$format=json",
+        avisos: ["O endere\xE7o original tinha uma data fixa (sempre o mesmo dia). Agora traz as cota\xE7\xF5es do ano corrente."]
+      },
+      fed_bcb_selic: { avisos: ["Traz s\xF3 os 30 registros mais recentes. Para uma s\xE9rie anual, pe\xE7a a s\xE9rie por per\xEDodo."] },
+      fed_bcb_ipca: { avisos: ["Traz s\xF3 os 24 meses mais recentes. Para uma s\xE9rie mais longa, pe\xE7a a s\xE9rie por per\xEDodo."] },
+      es_terceirizados: {
+        dadosPessoais: !0,
+        avisos: ["Pode conter nomes de pessoas (LGPD). Antes de usar, consulte o DPO; n\xE3o publique esses dados em reposit\xF3rio p\xFAblico."]
+      }
+    };
+    ORIGEM_LISTA = "Indicado na lista de fontes enviada pela reda\xE7\xE3o (out/2026), ainda n\xE3o conferido.", LINK_CONFERIDO = 'Link do conjunto informado pela reda\xE7\xE3o (out/2026). Antes de usar, confira os arquivos: se houver um por ano, marque "Juntar todos os arquivos"; se houver arquivos de assuntos diferentes, informe a parte do nome do arquivo desejado. A confer\xEAncia autom\xE1tica do cat\xE1logo lista os arquivos de cada conjunto.', ckanES = (conjunto, combinar = !1) => ({ portal: "https://dados.es.gov.br", conjunto, combinar }), LINK_CONFERIDO_AREA = "Arquivo confirmado pela reda\xE7\xE3o (out/2026): o conjunto tem um CSV por \xE1rea (Educa\xE7\xE3o, Pessoal, Sa\xFAde, Receita Corrente L\xEDquida (RCL), Endividamento). Pode ser importado direto no app ou virar fonte autom\xE1tica. Falta conferir as colunas: cole as primeiras linhas do arquivo na tela de colunas antes de usar.", portalES = (conjunto) => `https://dados.es.gov.br/dataset/${conjunto}`, CATALOGO_ACRESCIMOS = [
+      // ── Links conferidos pela redação (out/2026) ──
+      {
+        id: "es_receitas_municipios",
+        name: "Receitas dos Munic\xEDpios do ES",
+        shortTitle: "Receitas dos munic\xEDpios",
+        category: "Munic\xEDpios",
+        sphere: "es_municipal",
+        source: "dados.es.gov.br (conjunto receitas-municipios)",
+        url: portalES("receitas-municipios"),
+        pagina: portalES("receitas-municipios"),
+        ckan: ckanES("receitas-municipios"),
+        format: "CSV",
+        description: "Receitas das 78 prefeituras capixabas.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Receitas dos munic\xEDpios",
+        tags: ["receitas", "munic\xEDpios", "prefeituras"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_CONFERIDO, "Marque a coluna do munic\xEDpio para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "es_despesas_municipios",
+        name: "Despesas dos Munic\xEDpios do ES",
+        shortTitle: "Despesas dos munic\xEDpios",
+        category: "Munic\xEDpios",
+        sphere: "es_municipal",
+        source: "dados.es.gov.br (conjunto despesas-municipios)",
+        url: portalES("despesas-municipios"),
+        pagina: portalES("despesas-municipios"),
+        ckan: ckanES("despesas-municipios"),
+        format: "CSV",
+        description: "Despesas das 78 prefeituras capixabas.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Despesas dos munic\xEDpios",
+        tags: ["despesas", "munic\xEDpios", "prefeituras"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_CONFERIDO, "Marque a coluna do munic\xEDpio para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "es_convenios_ckan",
+        name: "Conv\xEAnios do Estado do ES (Portal da Transpar\xEAncia)",
+        shortTitle: "Conv\xEAnios do Estado",
+        category: "Receitas e Repasses",
+        sphere: "es_estadual",
+        source: "Portal da Transpar\xEAncia do Governo do ES (dados.es.gov.br)",
+        url: portalES("portal-da-transparencia-convenios-do-estado"),
+        pagina: portalES("portal-da-transparencia-convenios-do-estado"),
+        ckan: ckanES("portal-da-transparencia-convenios-do-estado"),
+        format: "CSV",
+        description: "Conv\xEAnios firmados pelo Estado e a execu\xE7\xE3o dos repasses.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Conv\xEAnios do Estado",
+        tags: ["conv\xEAnios", "repasses"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_CONFERIDO]
+      },
+      {
+        id: "es_emendas_parlamentares",
+        name: "Emendas Parlamentares do Estado do ES (Portal da Transpar\xEAncia)",
+        shortTitle: "Emendas parlamentares estaduais",
+        category: "Receitas e Repasses",
+        sphere: "es_estadual",
+        source: "Portal da Transpar\xEAncia do Governo do ES (dados.es.gov.br)",
+        url: portalES("portal-da-transparencia-emendas-parlamentares-do-estado"),
+        pagina: portalES("portal-da-transparencia-emendas-parlamentares-do-estado"),
+        ckan: ckanES("portal-da-transparencia-emendas-parlamentares-do-estado"),
+        format: "CSV",
+        description: "Emendas dos deputados estaduais: autor, destino, valores e execu\xE7\xE3o.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "weekly",
+        recommendedScheduleDesc: "Semanal",
+        suggestedName: "Emendas parlamentares estaduais",
+        tags: ["emendas", "deputados", "assembleia"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_CONFERIDO, "Tema sens\xEDvel em ano eleitoral: o uso na publica\xE7\xE3o passa pelo editor-chefe."]
+      },
+      {
+        id: "es_obras_publicas",
+        name: "Obras P\xFAblicas do Estado do ES",
+        shortTitle: "Obras p\xFAblicas",
+        category: "Gest\xE3o e Metas",
+        sphere: "es_estadual",
+        source: "dados.es.gov.br (conjunto obras-publicas)",
+        url: portalES("obras-publicas"),
+        pagina: portalES("obras-publicas"),
+        ckan: ckanES("obras-publicas"),
+        format: "CSV",
+        description: "Obras p\xFAblicas: local, situa\xE7\xE3o, valores e prazos.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "weekly",
+        recommendedScheduleDesc: "Semanal",
+        suggestedName: "Obras p\xFAblicas",
+        tags: ["obras", "infraestrutura", "munic\xEDpios"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_CONFERIDO]
+      },
+      {
+        id: "tce_saneamento_basico",
+        name: "TCE-ES: Saneamento B\xE1sico nos Munic\xEDpios do ES",
+        shortTitle: "Saneamento b\xE1sico (TCE-ES)",
+        category: "Munic\xEDpios",
+        sphere: "es_municipal",
+        source: "Tribunal de Contas do ES (TCE-ES), no dados.es.gov.br",
+        url: portalES("tcees-saneamento-basico"),
+        pagina: portalES("tcees-saneamento-basico"),
+        ckan: ckanES("tcees-saneamento-basico"),
+        format: "CSV",
+        description: "Indicadores de saneamento b\xE1sico dos munic\xEDpios, levantados pelo TCE-ES.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "Saneamento b\xE1sico (TCE-ES)",
+        tags: ["saneamento", "\xE1gua", "esgoto", "munic\xEDpios", "tce"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_CONFERIDO, "Marque a coluna do munic\xEDpio para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "tce_municipios_saude",
+        name: "TCE-ES: Sa\xFAde dos Munic\xEDpios do ES",
+        shortTitle: "Sa\xFAde dos munic\xEDpios (TCE-ES)",
+        category: "Munic\xEDpios",
+        sphere: "es_municipal",
+        source: "Tribunal de Contas do ES (TCE-ES), no dados.es.gov.br",
+        url: "https://dados.es.gov.br/dataset/c2d74fcf-5163-463c-9f5a-48e0e082c1b3/resource/f472ae45-a039-4d10-b029-fe6a2367b2a6/download/municipios-saude.csv",
+        pagina: `${portalES("tcees-despesas-com-saude-educacao-e-pessoal-receita-corrente-liquida-e-endividamento")}/resource/f472ae45-a039-4d10-b029-fe6a2367b2a6`,
+        ckan: { ...ckanES("tcees-despesas-com-saude-educacao-e-pessoal-receita-corrente-liquida-e-endividamento"), recurso: "saude" },
+        format: "CSV",
+        description: "Despesas com sa\xFAde dos munic\xEDpios (aplica\xE7\xE3o m\xEDnima constitucional de 15%).",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "Sa\xFAde dos munic\xEDpios (TCE-ES)",
+        tags: ["sa\xFAde", "asps", "limite constitucional", "munic\xEDpios", "tce"],
+        importavelNoApp: !0,
+        verificacao: "link_conferido",
+        avisos: [LINK_CONFERIDO_AREA, "Marque a coluna do munic\xEDpio para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "tce_municipios_educacao",
+        name: "TCE-ES: Educa\xE7\xE3o dos Munic\xEDpios do ES",
+        shortTitle: "Educa\xE7\xE3o dos munic\xEDpios (TCE-ES)",
+        category: "Munic\xEDpios",
+        sphere: "es_municipal",
+        source: "Tribunal de Contas do ES (TCE-ES), no dados.es.gov.br",
+        url: "https://dados.es.gov.br/dataset/c2d74fcf-5163-463c-9f5a-48e0e082c1b3/resource/015c1dad-5842-44e8-a307-68eafe6de28e/download/municipios-educacao.csv",
+        pagina: `${portalES("tcees-despesas-com-saude-educacao-e-pessoal-receita-corrente-liquida-e-endividamento")}/resource/015c1dad-5842-44e8-a307-68eafe6de28e`,
+        ckan: { ...ckanES("tcees-despesas-com-saude-educacao-e-pessoal-receita-corrente-liquida-e-endividamento"), recurso: "educacao" },
+        format: "CSV",
+        description: "Despesas com educa\xE7\xE3o dos munic\xEDpios (aplica\xE7\xE3o m\xEDnima de 25% e Fundeb).",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "Educa\xE7\xE3o dos munic\xEDpios (TCE-ES)",
+        tags: ["educa\xE7\xE3o", "mde", "fundeb", "limite constitucional", "munic\xEDpios", "tce"],
+        importavelNoApp: !0,
+        verificacao: "link_conferido",
+        avisos: [LINK_CONFERIDO_AREA, "Marque a coluna do munic\xEDpio para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "tce_municipios_pessoal",
+        name: "TCE-ES: Pessoal dos Munic\xEDpios do ES",
+        shortTitle: "Pessoal dos munic\xEDpios (TCE-ES)",
+        category: "Munic\xEDpios",
+        sphere: "es_municipal",
+        source: "Tribunal de Contas do ES (TCE-ES), no dados.es.gov.br",
+        url: "https://dados.es.gov.br/dataset/c2d74fcf-5163-463c-9f5a-48e0e082c1b3/resource/45c257a8-5b35-4486-af5c-5bfbc453304a/download/municipios-pessoal.csv",
+        pagina: `${portalES("tcees-despesas-com-saude-educacao-e-pessoal-receita-corrente-liquida-e-endividamento")}/resource/45c257a8-5b35-4486-af5c-5bfbc453304a`,
+        ckan: { ...ckanES("tcees-despesas-com-saude-educacao-e-pessoal-receita-corrente-liquida-e-endividamento"), recurso: "pessoal" },
+        format: "CSV",
+        description: "Despesas com pessoal dos munic\xEDpios em rela\xE7\xE3o ao limite da Lei de Responsabilidade Fiscal.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "Pessoal dos munic\xEDpios (TCE-ES)",
+        tags: ["pessoal", "folha", "lrf", "munic\xEDpios", "tce"],
+        importavelNoApp: !0,
+        verificacao: "link_conferido",
+        avisos: [LINK_CONFERIDO_AREA, "Marque a coluna do munic\xEDpio para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "tce_municipios_rcl",
+        name: "TCE-ES: Receita Corrente L\xEDquida dos Munic\xEDpios do ES",
+        shortTitle: "Receita Corrente L\xEDquida dos munic\xEDpios (TCE-ES)",
+        category: "Munic\xEDpios",
+        sphere: "es_municipal",
+        source: "Tribunal de Contas do ES (TCE-ES), no dados.es.gov.br",
+        url: "https://dados.es.gov.br/dataset/c2d74fcf-5163-463c-9f5a-48e0e082c1b3/resource/4bbc4025-d96f-437d-837f-acc1089e5fa5/download/rcl.csv",
+        pagina: `${portalES("tcees-despesas-com-saude-educacao-e-pessoal-receita-corrente-liquida-e-endividamento")}/resource/4bbc4025-d96f-437d-837f-acc1089e5fa5`,
+        ckan: { ...ckanES("tcees-despesas-com-saude-educacao-e-pessoal-receita-corrente-liquida-e-endividamento"), recurso: "receita corrente" },
+        format: "CSV",
+        description: "Receita corrente l\xEDquida (RCL) dos munic\xEDpios, base dos limites da LRF.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "Receita Corrente L\xEDquida dos munic\xEDpios (TCE-ES)",
+        tags: ["rcl", "receita corrente l\xEDquida", "lrf", "munic\xEDpios", "tce"],
+        importavelNoApp: !0,
+        verificacao: "link_conferido",
+        avisos: [LINK_CONFERIDO_AREA, "Marque a coluna do munic\xEDpio para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "tce_municipios_endividamento",
+        name: "TCE-ES: Endividamento dos Munic\xEDpios do ES",
+        shortTitle: "Endividamento dos munic\xEDpios (TCE-ES)",
+        category: "Munic\xEDpios",
+        sphere: "es_municipal",
+        source: "Tribunal de Contas do ES (TCE-ES), no dados.es.gov.br",
+        url: "https://dados.es.gov.br/dataset/c2d74fcf-5163-463c-9f5a-48e0e082c1b3/resource/359ca7d9-dea6-4741-a137-210b2cb63961/download/endividamento.csv",
+        pagina: `${portalES("tcees-despesas-com-saude-educacao-e-pessoal-receita-corrente-liquida-e-endividamento")}/resource/359ca7d9-dea6-4741-a137-210b2cb63961`,
+        ckan: { ...ckanES("tcees-despesas-com-saude-educacao-e-pessoal-receita-corrente-liquida-e-endividamento"), recurso: "endividamento" },
+        format: "CSV",
+        description: "D\xEDvida consolidada e endividamento dos munic\xEDpios.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "Anual",
+        suggestedName: "Endividamento dos munic\xEDpios (TCE-ES)",
+        tags: ["d\xEDvida", "endividamento", "lrf", "munic\xEDpios", "tce"],
+        importavelNoApp: !0,
+        verificacao: "link_conferido",
+        avisos: [LINK_CONFERIDO_AREA, "Marque a coluna do munic\xEDpio para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "es_despesas_execucao_ckan",
+        name: "Despesas do Estado do ES: Execu\xE7\xE3o Or\xE7ament\xE1ria e Financeira (Portal da Transpar\xEAncia)",
+        shortTitle: "Despesas do Estado (execu\xE7\xE3o)",
+        category: "Despesas do Estado",
+        sphere: "es_estadual",
+        source: "Portal da Transpar\xEAncia do Governo do ES (dados.es.gov.br)",
+        url: portalES("portal-da-transparencia-despesas-execucao-orcamentaria-e-financeira"),
+        pagina: portalES("portal-da-transparencia-despesas-execucao-orcamentaria-e-financeira"),
+        ckan: { portal: "https://dados.es.gov.br", conjunto: "portal-da-transparencia-despesas-execucao-orcamentaria-e-financeira", formato: "csv", combinar: !0 },
+        format: "CSV",
+        description: "Empenhos, liquida\xE7\xF5es e pagamentos do Estado. Provavelmente um arquivo por ano, como nas receitas.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "24h",
+        recommendedScheduleDesc: "Di\xE1ria (o ano corrente muda todo dia)",
+        suggestedName: "Despesas do Estado (execu\xE7\xE3o)",
+        tags: ["despesas", "empenho", "liquida\xE7\xE3o", "pagamento"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_CONFERIDO, "Se os arquivos forem t\xE3o grandes quanto os de receitas (centenas de MB por ano), use como fonte autom\xE1tica, somando por categorias."]
+      },
+      {
+        id: "es_transferencias_municipios_ckan",
+        name: "Transfer\xEAncias do Estado para os Munic\xEDpios do ES (Portal da Transpar\xEAncia)",
+        shortTitle: "Transfer\xEAncias aos munic\xEDpios",
+        category: "Receitas e Repasses",
+        sphere: "es_estadual",
+        source: "Portal da Transpar\xEAncia do Governo do ES (dados.es.gov.br)",
+        url: portalES("portal-da-transparencia-transferencias-para-municipios"),
+        pagina: portalES("portal-da-transparencia-transferencias-para-municipios"),
+        ckan: { portal: "https://dados.es.gov.br", conjunto: "portal-da-transparencia-transferencias-para-municipios", formato: "csv", combinar: !0 },
+        format: "CSV",
+        description: "Repasses do Estado aos 78 munic\xEDpios (constitucionais, conv\xEAnios e outros). \xDAtil para o anu\xE1rio por munic\xEDpio.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Transfer\xEAncias aos munic\xEDpios",
+        tags: ["transfer\xEAncias", "repasses", "munic\xEDpios", "icms", "ipva"],
+        importavelNoApp: !1,
+        verificacao: "link_conferido",
+        avisos: [LINK_CONFERIDO, "Marque a coluna do munic\xEDpio na tela de colunas para padronizar os nomes e acrescentar o c\xF3digo do IBGE."]
+      },
+      {
+        id: "es_compras_ckan",
+        name: "Compras e Contratos do Estado do ES (Portal da Transpar\xEAncia)",
+        shortTitle: "Compras e contratos do Estado",
+        category: "Gest\xE3o e Metas",
+        sphere: "es_estadual",
+        source: "Portal da Transpar\xEAncia do Governo do ES (dados.es.gov.br)",
+        url: portalES("portal-da-transparencia-compras"),
+        pagina: portalES("portal-da-transparencia-compras"),
+        ckan: { portal: "https://dados.es.gov.br", conjunto: "portal-da-transparencia-compras", formato: "csv", combinar: !0 },
+        format: "CSV",
+        description: "Licita\xE7\xF5es, contratos e fornecedores do Executivo estadual.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "weekly",
+        recommendedScheduleDesc: "Semanal",
+        suggestedName: "Compras e contratos do Estado",
+        tags: ["compras", "licita\xE7\xF5es", "contratos", "fornecedores"],
+        importavelNoApp: !1,
+        avisos: [ORIGEM_LISTA, "Fornecedores pessoa f\xEDsica podem aparecer com nome e CPF: confira antes de publicar (LGPD)."]
+      },
+      {
+        id: "es_servidores_ckan",
+        name: "Servidores do Estado do ES e Remunera\xE7\xE3o (Portal da Transpar\xEAncia)",
+        shortTitle: "Servidores e remunera\xE7\xE3o",
+        category: "Gest\xE3o e Pessoal",
+        sphere: "es_estadual",
+        source: "Portal da Transpar\xEAncia do Governo do ES (dados.es.gov.br)",
+        url: portalES("portal-da-transparencia-servidores"),
+        pagina: portalES("portal-da-transparencia-servidores"),
+        ckan: { portal: "https://dados.es.gov.br", conjunto: "portal-da-transparencia-servidores", formato: "csv", combinar: !1 },
+        format: "CSV",
+        description: "Quadro de servidores e remunera\xE7\xF5es do Executivo.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "Mensal",
+        suggestedName: "Servidores e remunera\xE7\xE3o",
+        tags: ["servidores", "folha", "remunera\xE7\xE3o", "pessoal"],
+        importavelNoApp: !1,
+        dadosPessoais: !0,
+        avisos: [ORIGEM_LISTA, "Cont\xE9m nomes e sal\xE1rios (LGPD). Consulte o DPO antes de usar; para o anu\xE1rio, prefira totais agregados (por \xF3rg\xE3o, cargo, faixa), sem identificar pessoas."]
+      },
+      {
+        id: "es_transparencia_webservices",
+        name: "WebServices do Portal da Transpar\xEAncia do ES (despesas por elemento, favorecidos)",
+        shortTitle: "WebServices da Transpar\xEAncia ES",
+        category: "Despesas do Estado",
+        sphere: "es_estadual",
+        source: "Portal da Transpar\xEAncia do ES (SECONT)",
+        url: "https://transparencia.es.gov.br",
+        pagina: "https://transparencia.es.gov.br",
+        format: "API",
+        description: "APIs em JSON: elementos e subelementos de despesa (empenhado, liquidado, pago) e favorecidos, por ano e unidade gestora.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "WebServices Transpar\xEAncia ES",
+        tags: ["despesas", "favorecidos", "api"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_LISTA, "APIs paginadas (numeroPagina) e por unidade gestora: a automa\xE7\xE3o ainda n\xE3o percorre p\xE1ginas. Para os mesmos dados, prefira os conjuntos do dados.es.gov.br.", "A lista de favorecidos pode conter pessoas f\xEDsicas (LGPD)."]
+      },
+      {
+        id: "tce_dados_abertos",
+        name: "TCE-ES: Dados Abertos (contas do Estado e das 78 prefeituras e c\xE2maras)",
+        shortTitle: "TCE-ES dados abertos",
+        category: "Munic\xEDpios",
+        sphere: "es_municipal",
+        source: "Tribunal de Contas do Estado do ES (TCE-ES)",
+        url: "https://www.tcees.tc.br/portal-da-transparencia/dados-abertos/",
+        pagina: "https://www.tcees.tc.br/portal-da-transparencia/dados-abertos/",
+        format: "CSV",
+        description: "Fonte para dados fiscais dos munic\xEDpios: receitas, despesas, pessoal, obras e licita\xE7\xF5es. Arquivos em ZIP (informado pela reda\xE7\xE3o).",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "TCE-ES dados abertos",
+        tags: ["tce", "munic\xEDpios", "prefeituras", "c\xE2maras", "zip"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_LISTA, "A p\xE1gina re\xFAne v\xE1rios arquivos. Para virar fonte autom\xE1tica, escolha o arquivo e mande o endere\xE7o e as primeiras linhas: a automa\xE7\xE3o j\xE1 l\xEA ZIP."]
+      },
+      {
+        id: "tce_cidades_api",
+        name: "TCE-ES: API do CidadES (contrata\xE7\xF5es, admiss\xF5es, unidades gestoras)",
+        shortTitle: "API do CidadES (TCE-ES)",
+        category: "Munic\xEDpios",
+        sphere: "es_municipal",
+        source: "Tribunal de Contas do Estado do ES (TCE-ES)",
+        url: "https://www.tcees.tc.br/ajuda/api-do-cidades/",
+        pagina: "https://www.tcees.tc.br/ajuda/api-do-cidades/",
+        format: "API",
+        description: "Documenta\xE7\xE3o da API do sistema CidadES do TCE-ES.",
+        columnsPreview: [],
+        yearsPreview: "a conferir",
+        recommendedSchedule: "monthly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "CidadES",
+        tags: ["tce", "cidades", "munic\xEDpios", "api"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_LISTA, "Confira na documenta\xE7\xE3o se a API \xE9 paginada ou exige cadastro: isso decide se a automa\xE7\xE3o consegue us\xE1-la.", "Admiss\xF5es podem conter dados pessoais (LGPD)."]
+      },
+      {
+        id: "es_geobases",
+        name: "Geobases / IDE-ES: mapas (limites municipais, hidrografia, rodovias)",
+        shortTitle: "Geobases (mapas do ES)",
+        category: "Geografia",
+        sphere: "es_estadual",
+        source: "IJSN / PRODEST (Geobases)",
+        url: "https://geobases.es.gov.br",
+        pagina: "https://geobases.es.gov.br",
+        format: "API",
+        description: "Camadas geogr\xE1ficas (GeoJSON, Shapefile, KML, WMS/WFS) de limites municipais, hidrografia, rodovias e meio ambiente.",
+        columnsPreview: [],
+        yearsPreview: "\u2014",
+        recommendedSchedule: "yearly",
+        recommendedScheduleDesc: "\u2014",
+        suggestedName: "Geobases",
+        tags: ["mapas", "geojson", "limites municipais", "wfs"],
+        apenasReferencia: !0,
+        importavelNoApp: !1,
+        avisos: [ORIGEM_LISTA, "S\xE3o dados de mapa, n\xE3o tabelas: \xFAteis para mapas por munic\xEDpio numa etapa futura; os pain\xE9is atuais n\xE3o usam essas camadas."]
+      }
+    ], PUBLIC_API_CATALOG = [
+      ...CATALOGO_ORIGINAL.map(revisar).filter((x) => x !== null),
+      ...CATALOGO_ACRESCIMOS.map((x) => x.verificacao === "link_conferido" ? x : { ...x, verificacao: "nao_verificado", avisos: [...x.avisos || [], NAO_VERIFICADO] })
+    ];
+  }
+});
+
 // automation/run.ts
 import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync3, appendFileSync, renameSync } from "fs";
 import { join as join4, dirname as dirname3 } from "path";
@@ -15451,47 +16394,50 @@ init_dataParser();
 init_dashboardFilters();
 var MAX_BYTES = 3 * 1024 * 1024 * 1024, MAX_BRUTO_NO_REPO = 90 * 1024 * 1024;
 function criarFetcher(opts = {}) {
-  let inatividadeMs = opts.inatividadeMs ?? 12e4, totalMs = opts.totalMs ?? 45 * 6e4, tentativas = opts.tentativas ?? 2, umaVez = async (url, limiteTotal) => {
-    let ctrl = new AbortController(), motivo = "", parado, rearmar = () => {
-      parado && clearTimeout(parado), parado = setTimeout(() => {
-        motivo = `o servidor ficou ${Math.round(inatividadeMs / 1e3)} segundos sem enviar dados`, ctrl.abort();
-      }, inatividadeMs);
-    }, teto = setTimeout(() => {
-      motivo = `passou de ${Math.round(limiteTotal / 6e4)} minutos, o tempo que restava nesta execu\xE7\xE3o (o portal est\xE1 lento); a automa\xE7\xE3o tenta de novo na pr\xF3xima execu\xE7\xE3o`, ctrl.abort();
-    }, limiteTotal);
-    rearmar();
-    try {
-      let res = await fetch(url, { redirect: "follow", signal: ctrl.signal, headers: { "User-Agent": "DataDash-Automacao/1.0 (+jornalismo de dados)" } }), len = Number(res.headers.get("content-length") || 0);
-      if (len > MAX_BYTES) throw new Error(`arquivo grande demais (${Math.round(len / 1048576)} MB; limite de ${Math.round(MAX_BYTES / 1048576)} MB)`);
-      let partes = [], total = 0;
-      if (res.body) {
-        let leitor = res.body.getReader();
-        for (; ; ) {
-          let { done, value } = await leitor.read();
-          if (done) break;
-          if (rearmar(), total += value.length, total > MAX_BYTES)
-            throw ctrl.abort(), new Error(`arquivo grande demais (mais de ${Math.round(MAX_BYTES / 1048576)} MB)`);
-          partes.push(Buffer.from(value));
-        }
-      }
-      return { status: res.status, body: Buffer.concat(partes, total), finalUrl: res.url || url };
-    } catch (e) {
-      throw motivo ? new Error(`download interrompido: ${motivo}`) : e?.name === "AbortError" ? new Error("download interrompido") : e;
-    } finally {
-      clearTimeout(teto), parado && clearTimeout(parado);
-    }
-  };
+  let inatividadeMs = opts.inatividadeMs ?? 12e4, totalMs = opts.totalMs ?? 45 * 6e4, tentativas = opts.tentativas ?? 5, esperaBase = opts.esperaMs ?? (process.env.DD_TESTE_RAPIDO ? 50 : 5e3), MB = (n) => (n / 1048576).toFixed(1).replace(".", ",");
   return async (url, o) => {
-    let ultimo, fim = Date.now() + (o?.totalMs ?? totalMs);
-    for (let i = 1; i <= tentativas; i++)
+    let limite = o?.totalMs ?? totalMs, fim = Date.now() + limite, folga = Math.min(6e4, limite / 4), feitas = 0, partes = [], recebido = 0, esperado = 0, aceitaRetomar = !1, status = 200, finalUrl = url, ultimo;
+    for (let i = 1; i <= tentativas; i++) {
+      feitas = i;
+      let ctrl = new AbortController(), motivo = "", parado, rearmar = () => {
+        parado && clearTimeout(parado), parado = setTimeout(() => {
+          motivo = `o servidor ficou ${Math.round(inatividadeMs / 1e3)} segundos sem enviar dados`, ctrl.abort();
+        }, inatividadeMs);
+      }, restante = Math.max(1e3, fim - Date.now()), teto = setTimeout(() => {
+        motivo = `passou de ${Math.round(restante / 6e4)} minutos, o tempo que restava nesta execu\xE7\xE3o (o portal est\xE1 lento); a automa\xE7\xE3o tenta de novo na pr\xF3xima execu\xE7\xE3o`, ctrl.abort();
+      }, restante);
+      rearmar();
       try {
-        return await umaVez(url, Math.max(1e3, fim - Date.now()));
+        let retomando = recebido > 0 && aceitaRetomar;
+        recebido > 0 && !retomando && (partes.length = 0, recebido = 0);
+        let headers = { "User-Agent": "DataDash-Automacao/1.0 (+jornalismo de dados)" };
+        retomando && (headers.Range = `bytes=${recebido}-`);
+        let res = await fetch(url, { redirect: "follow", signal: ctrl.signal, headers });
+        if (retomando && res.status !== 206 && (partes.length = 0, recebido = 0), res.status !== 206 && (status = res.status, esperado = Number(res.headers.get("content-length") || 0), aceitaRetomar = /bytes/i.test(res.headers.get("accept-ranges") || "")), finalUrl = res.url || url, esperado > MAX_BYTES) throw new Error(`arquivo grande demais (${Math.round(esperado / 1048576)} MB; limite de ${Math.round(MAX_BYTES / 1048576)} MB)`);
+        if (retomando && res.status === 206 && console.log(`  retomando o download a partir de ${MB(recebido)} MB`), res.body) {
+          let leitor = res.body.getReader();
+          for (; ; ) {
+            let { done, value } = await leitor.read();
+            if (done) break;
+            if (rearmar(), recebido += value.length, recebido > MAX_BYTES)
+              throw ctrl.abort(), new Error(`arquivo grande demais (mais de ${Math.round(MAX_BYTES / 1048576)} MB)`);
+            partes.push(Buffer.from(value));
+          }
+        }
+        if (esperado && recebido < esperado && status < 400) throw new Error("terminated");
+        return { status, body: Buffer.concat(partes, recebido), finalUrl };
       } catch (e) {
-        if (ultimo = e, !/fetch failed|terminated|UND_ERR|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket|sem enviar dados/i.test(String(e?.message) + String(e?.cause?.code || "")) || i === tentativas) break;
-        await new Promise((r) => setTimeout(r, process.env.DD_TESTE_RAPIDO ? 100 : 5e3));
+        if (ultimo = motivo ? new Error(`download interrompido: ${motivo}`) : e, motivo.startsWith("passou de")) break;
+        let msg2 = String(e?.message || "") + String(e?.cause?.code || "") + String(e?.cause?.message || "");
+        if (!(!/ECONNREFUSED|ENOTFOUND|CERT_|certificate/i.test(msg2) && /fetch failed|terminated|other side closed|UND_ERR|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket|sem enviar dados/i.test(msg2 + (motivo || ""))) || i === tentativas || Date.now() > fim - folga) break;
+        let espera = esperaBase * i;
+        console.log(`  o download foi interrompido (${MB(recebido)} MB recebidos${esperado ? ` de ${MB(esperado)} MB` : ""}); tentativa ${i + 1} de ${tentativas} em ${Math.round(espera / 1e3)} s${aceitaRetomar ? ", retomando de onde parou" : ""}`), await new Promise((r) => setTimeout(r, espera));
+      } finally {
+        clearTimeout(teto), parado && clearTimeout(parado);
       }
+    }
     let causa = ultimo?.cause?.code ? ` (${ultimo.cause.code})` : "", msg = String(ultimo?.message || ultimo);
-    throw new Error(msg === "fetch failed" ? `n\xE3o foi poss\xEDvel conectar ao endere\xE7o${causa}` : msg);
+    throw msg === "fetch failed" ? new Error(`n\xE3o foi poss\xEDvel conectar ao endere\xE7o${causa}`) : /^terminated$|other side closed/i.test(msg) ? new Error(`a conex\xE3o com o portal caiu durante o download (${MB(recebido)} MB recebidos${esperado ? ` de ${MB(esperado)} MB` : ""}, depois de ${feitas} ${feitas === 1 ? "tentativa" : "tentativas"}); a automa\xE7\xE3o tenta de novo na pr\xF3xima execu\xE7\xE3o`) : new Error(msg);
   };
 }
 var fetchPadrao = criarFetcher();
@@ -15917,7 +16863,7 @@ Os pain\xE9is continuam com a vers\xE3o anterior. No app: Bases \u2192 "${atual.
     }
   return { linhas, alertas, publicacao, issues, resumo: md, siteMudou: !!publicacao?.mudou };
 }
-var VERSAO_AUTOMACAO = "2026-10-22.8 (tempo de coleta definido no fluxo)";
+var VERSAO_AUTOMACAO = "2026-10-22.10 (download retoma de onde parou)";
 async function cli() {
   console.log(`DataDash \xB7 automa\xE7\xE3o vers\xE3o ${VERSAO_AUTOMACAO}`);
   let args = process.argv.slice(2), val = (k) => {
@@ -15925,7 +16871,23 @@ async function cli() {
     return i >= 0 ? args[i + 1] : void 0;
   }, has = (k) => args.includes(k);
   process.env.TZ = process.env.TZ || "America/Sao_Paulo";
-  let appDir = join4(dirname3(fileURLToPath(import.meta.url)), ".."), dados = val("--dados") || ".", firebase = null, comFirebase = !has("--sem-firebase") && !!process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  let appDir = join4(dirname3(fileURLToPath(import.meta.url)), ".."), dados = val("--dados") || ".";
+  if (val("--fonte") === "conferir-catalogo") {
+    let { conferirConjuntos: conferirConjuntos2, relatorioConferencia: relatorioConferencia2 } = await Promise.resolve().then(() => (init_conferir(), conferir_exports)), { conjuntosDoCatalogo: conjuntosDoCatalogo2 } = await Promise.resolve().then(() => (init_apiCatalog(), apiCatalog_exports)), itens = conjuntosDoCatalogo2();
+    try {
+      for (let f of loadConfigDir(dados).fontes) f.ckan && itens.push({ id: f.id, nome: f.nome, portal: f.ckan.portal, conjunto: f.ckan.conjunto });
+    } catch {
+    }
+    console.log(`Conferindo ${itens.length} conjuntos no portal\u2026`);
+    let res = await conferirConjuntos2(itens, fetchPadrao), md = relatorioConferencia2(res, /* @__PURE__ */ new Date());
+    mkdirSync3(join4(dados, "estado"), { recursive: !0 }), writeFileSync3(join4(dados, "estado", "conferencia-catalogo.md"), md + `
+`), writeFileSync3(join4(dados, "estado", "conferencia-catalogo.json"), JSON.stringify(res, null, 1) + `
+`), console.log(md), process.env.GITHUB_STEP_SUMMARY && appendFileSync(process.env.GITHUB_STEP_SUMMARY, md + `
+`), process.env.GITHUB_OUTPUT && appendFileSync(process.env.GITHUB_OUTPUT, `site_mudou=false
+`);
+    return;
+  }
+  let firebase = null, comFirebase = !has("--sem-firebase") && !!process.env.GOOGLE_APPLICATION_CREDENTIALS;
   if (comFirebase || console.log("Modo simplificado: sem credenciais do Firebase. Coleta, hist\xF3rico, tratamento, JSON final e avisos funcionam; a atualiza\xE7\xE3o das bases \xE9 feita pelo app ao ler o JSON."), comFirebase) {
     let { createAdminContext: createAdminContext2 } = await Promise.resolve().then(() => (init_serverSync(), serverSync_exports)), { adminPublishSource: adminPublishSource2 } = await Promise.resolve().then(() => (init_publish(), publish_exports)), cfg = JSON.parse(readFileSync4(join4(appDir, "firebase-applet-config.json"), "utf-8")), ctx = await createAdminContext2({ projectId: cfg.projectId, databaseId: cfg.firestoreDatabaseId }), loadDataset = async (id) => {
       let s = await ctx.db.collection("datasets").doc(id).get();
