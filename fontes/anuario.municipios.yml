@@ -1,0 +1,93 @@
+# ════════════════════════════════════════════════════════════════════════════
+# RECEITAS E DESPESAS DOS 78 MUNICÍPIOS DO ES — projeto "anuario"
+# Um ZIP por ano no portal do ES (municipios-receitas-AAAA.zip, municipios-despesas-AAAA.zip).
+# O município vem da coluna EsferaAdministrativa (que traz o nome da cidade), padronizado pela
+# lista do IBGE e com o código do IBGE; se ela não trouxer município reconhecível, o robô tenta o
+# nome da unidade gestora ("PREFEITURA MUNICIPAL DE VITÓRIA", "CÂMARA MUNICIPAL DA SERRA"…).
+#
+# ATENÇÃO, antes de publicar: confira se os valores de cada mês são do mês ou ACUMULADOS no
+# ano. A soma é feita só dentro de cada mês (vale nos dois casos); se forem acumulados, o total
+# do ano é o de dezembro, não a soma dos meses.
+#
+# Série: a partir de 2019 (como as fontes do Estado). Para a série completa, troque
+# ano_minimo para 2013 (a primeira coleta fica maior).
+# ════════════════════════════════════════════════════════════════════════════
+
+fontes:
+  - id: receitas-municipios
+    nome: Receitas dos municípios do ES
+    ativo: true
+    ckan:
+      portal: https://dados.es.gov.br
+      conjunto: receitas-municipios
+      recurso: municipios-receitas
+      formato: zip
+      combinar: true
+      ano_minimo: 2019
+    agenda: { frequencia: mensal, dia_do_mes: 15, hora: "06:00", tentar_ate_novidade_dias: 10 }
+    max_dias_sem_novidade: 60
+    bruto: nunca
+    fonte_credito: Portal de Dados Abertos do Governo do ES (dados.es.gov.br)
+    # dataset_id: "COLE_AQUI_O_ID_DA_BASE"
+    colunas_tempo: { ano: ano, mes: mes }
+    tratamento:
+      renomear:
+        Ano: ano
+        Mes: mes
+        UnidadeGestora: unidade_gestora
+        EsferaAdministrativa: municipio_informado
+        NomeCategoria: categoria
+        NomeOrigem: origem
+        PrevisaoInicial: previsao_inicial
+        PrevisaoAtualizada: previsao_atualizada
+        Arrecadada: arrecadada
+        ArrecadadaFUNDEB: arrecadada_fundeb
+      inteiros: [ano, mes]
+      numeros: [previsao_inicial, previsao_atualizada, arrecadada, arrecadada_fundeb]
+      texto: [unidade_gestora, municipio_informado, categoria, origem]
+      municipio_no_texto: { colunas: [municipio_informado, unidade_gestora], nome: municipio, codigo_ibge: cod_ibge }
+      descartar_mes_em_andamento: { ano: ano, mes: mes }
+      agrupar:
+        por: [ano, mes, cod_ibge, municipio, categoria, origem]
+        somar: [previsao_inicial, previsao_atualizada, arrecadada, arrecadada_fundeb]
+        contar: lancamentos
+
+  - id: despesas-municipios
+    nome: Despesas dos municípios do ES
+    ativo: true
+    ckan:
+      portal: https://dados.es.gov.br
+      conjunto: despesas-municipios
+      recurso: municipios-despesas
+      formato: zip
+      combinar: true
+      ano_minimo: 2019
+    agenda: { frequencia: mensal, dia_do_mes: 15, hora: "06:00", tentar_ate_novidade_dias: 10 }
+    max_dias_sem_novidade: 60
+    bruto: nunca
+    fonte_credito: Portal de Dados Abertos do Governo do ES (dados.es.gov.br)
+    # dataset_id: "COLE_AQUI_O_ID_DA_BASE"
+    colunas_tempo: { ano: ano, mes: mes }
+    tratamento:
+      renomear:
+        Ano: ano
+        Mes: mes
+        UnidadeGestora: unidade_gestora
+        EsferaAdministrativa: municipio_informado
+        DescricaoFuncao: funcao
+        DescricaoCategoria: categoria_economica
+        DescricaoGrupoNatureza: grupo_despesa
+        PrevisaoInicial: dotacao_inicial
+        PrevisaoAtualizada: dotacao_atualizada
+        Empenhada: empenhado
+        Liquidada: liquidado
+        Paga: pago
+      inteiros: [ano, mes]
+      numeros: [dotacao_inicial, dotacao_atualizada, empenhado, liquidado, pago]
+      texto: [unidade_gestora, municipio_informado, funcao, categoria_economica, grupo_despesa]
+      municipio_no_texto: { colunas: [municipio_informado, unidade_gestora], nome: municipio, codigo_ibge: cod_ibge }
+      descartar_mes_em_andamento: { ano: ano, mes: mes }
+      agrupar:
+        por: [ano, mes, cod_ibge, municipio, funcao, categoria_economica, grupo_despesa]
+        somar: [dotacao_inicial, dotacao_atualizada, empenhado, liquidado, pago]
+        contar: lancamentos
