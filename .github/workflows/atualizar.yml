@@ -108,10 +108,18 @@ jobs:
           git config user.name "automacao-dados"
           git config user.email "automacao-dados@users.noreply.github.com"
           rm -f estado/*.tmp
-          git add bruto final estado referencias 2>/dev/null || true
-          if git diff --cached --quiet; then echo "Nada novo para gravar."; else
+          # Adiciona só as pastas que existem (uma pasta ausente fazia o Git recusar o comando inteiro)
+          for pasta in bruto final estado referencias; do
+            if [ -e "$pasta" ]; then git add "$pasta"; fi
+          done
+          if git diff --cached --quiet; then
+            echo "Nada novo para gravar."
+          else
             git commit -m "Dados atualizados em $(date '+%d/%m/%Y %H:%M')"
+            # Se alguém editou o repositório durante a execução (ex.: fontes/), junta antes de enviar
+            git pull --rebase --autostash
             git push
+            echo "Gravado: $(git show --stat --oneline HEAD | tail -1)"
           fi
 
       - name: Preparar site para o GitHub Pages
