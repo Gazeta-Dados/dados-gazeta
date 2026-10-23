@@ -125,5 +125,92 @@
     "ultimaVerificacao": "2026-10-23T22:30:55.226Z",
     "ultimoErro": "não foi possível conectar ao endereço (UND_ERR_CONNECT_TIMEOUT)",
     "ultimoErroEm": "2026-10-23T22:30:55.226Z"
+  },
+  "receitas-municipios": {
+    "partes": {
+      "municipios-receitas-2019-zip": {
+        "hash": "3652ccbe9f962727c13554fe7f15aa4447f237cc60b259fd1f2d8c90a3479734",
+        "atualizadoEm": "2026-05-20T17:02:56.755291",
+        "verificadoEm": "2026-10-23T23:08:13.317Z"
+      },
+      "municipios-receitas-2020-zip": {
+        "hash": "09647fefe14b8e8baa0d981ceb05a8580e4e0e29db5152edf79ca9e865e16445",
+        "atualizadoEm": "2026-05-20T17:02:57.472458",
+        "verificadoEm": "2026-10-23T23:08:13.317Z"
+      },
+      "municipios-receitas-2021-zip": {
+        "hash": "f91f2e44e3accdae35b710721f66475bbdb916ac24ed5a27fbca786c303faf26",
+        "atualizadoEm": "2026-05-20T17:02:58.127118",
+        "verificadoEm": "2026-10-23T23:08:13.317Z"
+      },
+      "municipios-receitas-2022-zip": {
+        "hash": "952a9b9b88afeda1927eec06e6d75004e1c471671532f77390668cb1ad8a48a8",
+        "atualizadoEm": "2026-10-08T09:42:32.958673",
+        "verificadoEm": "2026-10-23T23:08:13.317Z"
+      },
+      "municipios-receitas-2023-zip": {
+        "hash": "79ce2195529e2366232e53bdb22fa718b040874d73432284801abae66da4ac13",
+        "atualizadoEm": "2026-10-08T09:42:57.727904",
+        "verificadoEm": "2026-10-23T23:08:13.317Z"
+      },
+      "municipios-receitas-2024-zip": {
+        "hash": "e072c3eaa1c002c7e373957167477968b9def2e9922ad411ae3cfb9235ab65e2",
+        "atualizadoEm": "2026-10-08T09:43:28.485810",
+        "verificadoEm": "2026-10-23T23:08:13.317Z"
+      },
+      "municipios-receitas-2025-zip": {
+        "hash": "4c92581383559f33dfc12df2d66f24b9337b7f85512f15de69383d662e671ee8",
+        "atualizadoEm": "2026-10-08T09:43:56.629576",
+        "verificadoEm": "2026-10-23T23:08:13.317Z"
+      },
+      "municipios-receitas-2026-zip": {
+        "hash": "16c05ed0deadc41d629114e85b6b7d5068ee0915aee7da9a9f59b422240a23bb",
+        "atualizadoEm": "2026-10-08T09:44:17.893616",
+        "verificadoEm": "2026-10-23T23:08:13.317Z"
+      }
+    },
+    "ultimaVerificacao": "2026-10-23T23:08:13.317Z",
+    "hash": "1f53eac85fbfbd8ecbb60231ea0045532533ec6279734fb6c58c752e60b614d2",
+    "ultimaNovidade": "2026-10-23T23:08:13.317Z",
+    "avisos": []
+  },
+  "despesas-municipios": {
+    "partes": {
+      "municipios-despesas-2019-zip": {
+        "hash": "c74e90d77cb832a3f3d4c4a574bd4e7e84a9e5c6c4e7fbca7eb25ab3eb6c38df",
+        "atualizadoEm": "2026-05-22T01:14:15.583651",
+        "verificadoEm": "2026-10-23T23:08:13.317Z"
+      },
+      "municipios-despesas-2020-zip": {
+        "hash": "fbf8d166bdb4013e595be1a0d4863691b5c676c2f4057862df01d244d02302df",
+        "atualizadoEm": "2026-05-22T01:14:16.436775",
+        "verificadoEm": "2026-10-23T23:08:13.317Z"
+      },
+      "municipios-despesas-2021-zip": {
+        "hash": "172be3c518cc1226ee873fa37252e6fe6a666b4344f0ec87d21e896980f50a4b",
+        "atualizadoEm": "2026-05-22T01:14:17.276551",
+        "verificadoEm": "2026-10-23T23:08:13.317Z"
+      },
+      "municipios-despesas-2022-zip": {
+        "hash": "0c5b65ecfda305b136373343c803589741eba78cc13a64b0cc99c103c7846225",
+        "atualizadoEm": "2026-05-22T01:14:18.124787",
+        "verificadoEm": "2026-10-23T23:08:13.317Z"
+      },
+      "municipios-despesas-2023-zip": {
+        "hash": "70ae4d861e6a3dc61ad0465fdd7c68a2eb8f376f669f9000037db0d8f62e4fe3",
+        "atualizadoEm": "2026-05-22T01:14:18.874817",
+        "verificadoEm": "2026-10-23T23:08:13.317Z"
+      },
+      "municipios-despesas-2024-zip": {
+        "hash": "09b9eab4b786789839c85d7e9750be7a77a69008659495e3355556f7a086de70",
+        "atualizadoEm": "2026-05-22T01:14:19.848707",
+        "verificadoEm": "2026-10-23T23:08:13.317Z"
+      },
+      "municipios-despesas-2025-zip": {
+        "hash": "aa72b7f85ce49e01b0685d7492e7f334b76de8bbbb0ac1bdfe78539cee0ab887",
+        "atualizadoEm": "2026-10-08T09:38:33.162497",
+        "verificadoEm": "2026-10-23T23:08:13.317Z"
+      }
+    }
   }
 }
