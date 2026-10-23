@@ -1,0 +1,27 @@
+{
+  "receitas-es": {
+    "partes": {
+      "receitas-2019-csv": {
+        "brutoMes": "2026-10",
+        "hash": "4bfee429aab9e6f2698ffdd9e8acbcf9940a59d83d81d56e19b4297633a30653",
+        "atualizadoEm": "2026-10-16T20:13:29.360050",
+        "verificadoEm": "2026-10-23T12:08:05.233Z"
+      },
+      "receitas-2020-csv": {
+        "brutoMes": "2026-10",
+        "hash": "b8720ae6ccc07fabf34fd44fa93c1535ca87772988dcd0add0fdef4ff12de90c",
+        "atualizadoEm": "2026-10-16T20:13:56.987525",
+        "verificadoEm": "2026-10-23T12:08:05.233Z"
+      },
+      "receitas-2021-csv": {
+        "brutoMes": "2026-10",
+        "hash": "51b2ab51b80b1ae9c916ef6d6811edc68b7d556c7cae1dc5af1fcf8f46af0319",
+        "atualizadoEm": "2026-10-16T20:14:24.681829",
+        "verificadoEm": "2026-10-23T12:08:05.233Z"
+      }
+    },
+    "ultimaVerificacao": "2026-10-23T12:08:05.233Z",
+    "ultimoErro": "terminated",
+    "ultimoErroEm": "2026-10-23T12:08:05.233Z"
+  }
+}
