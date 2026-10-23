@@ -5487,6 +5487,98 @@ var require_dist = __commonJS({
   }
 });
 
+// automation/config.ts
+import { existsSync, readdirSync, readFileSync } from "fs";
+import { basename, join } from "path";
+function validateConfig(raw) {
+  let errs = [], fontes = Array.isArray(raw.fontes) ? raw.fontes : [];
+  fontes.length || errs.push('fontes.yml: a lista "fontes" est\xE1 vazia.');
+  let ids = /* @__PURE__ */ new Set();
+  if (fontes.forEach((f, i) => {
+    let where = `fontes[${i}]${f && f.id ? ` (${f.id})` : ""}`;
+    if (!f || typeof f != "object") {
+      errs.push(`${where}: item inv\xE1lido.`);
+      return;
+    }
+    ID_RE.test(f.id || "") || errs.push(`${where}: "id" deve ter s\xF3 letras min\xFAsculas, n\xFAmeros e h\xEDfens.`), ids.has(f.id) && errs.push(`${where}: "id" repetido.`), ids.add(f.id), f.nome || errs.push(`${where}: falta "nome".`), [f.url ? 1 : 0, f.ckan ? 1 : 0, f.arquivo ? 1 : 0].reduce((a, b) => a + b, 0) > 1 && errs.push(`${where}: use s\xF3 uma origem: "url", "ckan" ou "arquivo".`), f.sinal_de_novidade !== void 0 && !/^https?:\/\//.test(String(f.sinal_de_novidade)) && errs.push(`${where}: sinal_de_novidade precisa ser um endere\xE7o http(s).`), f.anos && (Number(f.anos.de) >= 1990 && Number(f.anos.de) <= 2100 || errs.push(`${where}: anos.de deve ser um ano (ex.: 2015).`), (!f.url || !/\{\{(ANO|YYYY)\}\}/i.test(f.url)) && errs.push(`${where}: com "anos", a url precisa ter o marcador {{ANO}} no lugar do ano.`)), f.arquivo ? (!/^entrada\/[\w\-./ ]+\.(xlsx|csv|tsv|json|zip)$/i.test(f.arquivo) || f.arquivo.includes("..")) && errs.push(`${where}: "arquivo" deve estar na pasta entrada/ e terminar em .xlsx, .csv, .json ou .zip (ex.: entrada/anuario/pib.xlsx).`) : f.ckan ? (/^https:\/\//.test(f.ckan.portal || "") || errs.push(`${where}: ckan.portal precisa ser um endere\xE7o https:// (ex.: https://dados.es.gov.br).`), (!f.ckan.conjunto || /\//.test(f.ckan.conjunto)) && errs.push(`${where}: ckan.conjunto \xE9 o final do endere\xE7o do conjunto (sem barras), ex.: portal-da-transparencia-receitas.`)) : /^https?:\/\//.test(f.url || "") ? /\/dataset\/[^/]+\/?$/.test(f.url || "") && errs.push(`${where}: a "url" \xE9 a p\xE1gina de um conjunto CKAN, n\xE3o um arquivo. Use o bloco "ckan" (ver exemplo em fontes.yml).`) : errs.push(`${where}: informe a origem: "url" (http:// ou https://), um bloco "ckan" ou "arquivo" (planilha em entrada/).`), /(^|[^{])\{[A-Za-z_]+\}(?!\})/.test(f.url || "") && errs.push(`${where}: na "url", use chaves duplas nos marcadores, ex.: {{ANO}} (n\xE3o {ANO}).`);
+    let fr = f.agenda && f.agenda.frequencia;
+    ["horaria", "diaria", "semanal", "mensal", "anual"].includes(fr) || errs.push(`${where}: agenda.frequencia deve ser horaria, diaria, semanal, mensal ou anual.`), f.agenda?.hora && !/^\d{2}:\d{2}$/.test(f.agenda.hora) && errs.push(`${where}: agenda.hora no formato "06:00".`), fr === "mensal" && !(Number(f.agenda.dia_do_mes) >= 1 && Number(f.agenda.dia_do_mes) <= 31) && errs.push(`${where}: agenda.dia_do_mes (1\u201331) \xE9 obrigat\xF3rio na frequ\xEAncia mensal.`), fr === "semanal" && !(Number(f.agenda.dia_da_semana) >= 0 && Number(f.agenda.dia_da_semana) <= 6) && errs.push(`${where}: agenda.dia_da_semana (0\u20136) \xE9 obrigat\xF3rio na frequ\xEAncia semanal.`);
+  }), errs.length) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
+- ` + errs.join(`
+- `));
+  return { fontes: fontes.map((f) => ({ ativo: !0, formato: "auto", ...f })), publicacao: raw.publicacao || {} };
+}
+function loadConfigDir(dir, doApp = []) {
+  let partes = [], raiz = join(dir, "fontes.yml");
+  existsSync(raiz) && partes.push({ arquivo: "fontes.yml", raw: (0, import_yaml.parse)(readFileSync(raiz, "utf-8")) || {} });
+  let pasta = join(dir, "fontes");
+  if (existsSync(pasta))
+    for (let nome of readdirSync(pasta).filter((n) => /\.ya?ml$/i.test(n)).sort()) {
+      let projeto = basename(nome).replace(/\.ya?ml$/i, "").split(".")[0], complemento = basename(nome).replace(/\.ya?ml$/i, "").split(".").slice(1).join(".");
+      if (!PROJETO_RE.test(projeto) || complemento && !/^[a-z0-9][a-z0-9-]{0,40}$/.test(complemento)) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
+- fontes/${nome}: o nome do arquivo vira o nome do projeto; use s\xF3 letras min\xFAsculas, n\xFAmeros e h\xEDfens (ex.: anuario.yml ou anuario.catalogo.yml).`);
+      partes.push({ arquivo: `fontes/${nome}`, raw: (0, import_yaml.parse)(readFileSync(join(pasta, nome), "utf-8")) || {}, projeto });
+    }
+  if (!partes.length && !doApp.length) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
+- n\xE3o encontrei fontes.yml nem a pasta fontes/ (e nenhuma fonte cadastrada no app).`);
+  let fontes = [], erros = [], publicacao = {};
+  for (let p of partes) {
+    try {
+      let lista = Array.isArray(p.raw.fontes) ? p.raw.fontes : [];
+      if (!lista.length) continue;
+      let cfg = validateConfig({ fontes: lista });
+      for (let f of cfg.fontes)
+        p.projeto && (f.projeto = p.projeto), f.projeto && !PROJETO_RE.test(f.projeto) && erros.push(`${p.arquivo} (${f.id}): "projeto" s\xF3 com letras min\xFAsculas, n\xFAmeros e h\xEDfens.`), f.arquivo && f.projeto && !f.arquivo.startsWith(`entrada/${f.projeto}/`) && erros.push(`${p.arquivo} (${f.id}): a planilha deve ficar em entrada/${f.projeto}/ (est\xE1 em ${f.arquivo}).`), fontes.push(f);
+    } catch (e) {
+      erros.push(...String(e.message).replace(`Configura\xE7\xE3o inv\xE1lida:
+- `, "").split(`
+- `).map((m) => `${p.arquivo}: ${m}`));
+    }
+    p.raw.publicacao && (publicacao = { ...publicacao, ...p.raw.publicacao });
+  }
+  for (let f of doApp) fontes.push(f);
+  let vistos = /* @__PURE__ */ new Map();
+  for (let f of fontes) {
+    let ja = vistos.get(f.id), onde = f.origem === "app" ? "tela Fontes autom\xE1ticas do app" : f.projeto || "fontes.yml";
+    ja && erros.push(`o id "${f.id}" aparece em mais de uma fonte (${ja} e ${onde}); ids precisam ser \xFAnicos.`), vistos.set(f.id, onde);
+  }
+  if (erros.length) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
+- ` + erros.join(`
+- `));
+  if (!fontes.length) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
+- nenhuma fonte configurada.`);
+  return { fontes, publicacao };
+}
+function validarFontesDoApp(docs) {
+  let fontes = [], erros = [];
+  for (let d of docs) {
+    let cfg = { ...d.config || {}, id: d.id, ativo: d.ativo !== !1 };
+    if (cfg.arquivo) {
+      erros.push({ id: d.id, nome: cfg.nome || d.id, mensagem: "planilhas da pasta entrada/ s\xE3o configuradas nos arquivos do GitHub, n\xE3o no app" });
+      continue;
+    }
+    try {
+      let f = validateConfig({ fontes: [cfg] }).fontes[0];
+      if (f.projeto && !PROJETO_RE.test(f.projeto)) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
+- "projeto" s\xF3 com letras min\xFAsculas, n\xFAmeros e h\xEDfens.`);
+      fontes.push({ ...f, origem: "app" });
+    } catch (e) {
+      erros.push({ id: d.id, nome: cfg.nome || d.id, mensagem: String(e.message).replace(`Configura\xE7\xE3o inv\xE1lida:
+- `, "").replace(/\n- /g, "; ").replace(/fontes\[0\] \([^)]*\): /g, "") });
+    }
+  }
+  return { fontes, erros };
+}
+function pastaFonte(f) {
+  return f.projeto ? `${f.projeto}/${f.id}` : f.id;
+}
+var import_yaml, ID_RE, PROJETO_RE, init_config = __esm({
+  "automation/config.ts"() {
+    import_yaml = __toESM(require_dist(), 1), ID_RE = /^[a-z0-9][a-z0-9-]{1,62}$/;
+    PROJETO_RE = /^[a-z0-9][a-z0-9-]{0,40}$/;
+  }
+});
+
 // node_modules/papaparse/papaparse.js
 var require_papaparse = __commonJS({
   "node_modules/papaparse/papaparse.js"(exports, module) {
@@ -11555,6 +11647,235 @@ var require_lib3 = __commonJS({
   }
 });
 
+// automation/xlsx.ts
+function decodificar(s) {
+  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => e[0] === "#" ? String.fromCodePoint(e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)) : ENT[e.toLowerCase()] ?? m);
+}
+function textos(xml) {
+  let out = "";
+  for (let m of xml.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)) out += decodificar(m[1]);
+  return out;
+}
+function colunaParaIndice(ref) {
+  let letras = (ref.match(/^[A-Z]+/i) || ["A"])[0].toUpperCase(), n = 0;
+  for (let c of letras) n = n * 26 + (c.charCodeAt(0) - 64);
+  return n - 1;
+}
+function formatoEhData(codigo) {
+  let limpo = codigo.replace(/"[^"]*"/g, "").replace(/\[[^\]]*\]/g, "").replace(/\\./g, "");
+  return /[dy]/i.test(limpo);
+}
+function serialParaData(n) {
+  let ms = Math.round((n - 25569) * 86400 * 1e3), d = new Date(ms), dd = String(d.getUTCDate()).padStart(2, "0"), mm = String(d.getUTCMonth() + 1).padStart(2, "0"), hh = d.getUTCHours(), mi = d.getUTCMinutes(), base = `${dd}/${mm}/${d.getUTCFullYear()}`;
+  return hh || mi ? `${base} ${String(hh).padStart(2, "0")}:${String(mi).padStart(2, "0")}` : base;
+}
+async function lerXlsx(buf, opts = {}) {
+  let zip = await import_jszip.default.loadAsync(buf), wb = await zip.file("xl/workbook.xml")?.async("string");
+  if (!wb) throw new Error("arquivo n\xE3o \xE9 uma planilha .xlsx v\xE1lida (falta xl/workbook.xml)");
+  let abas = [...wb.matchAll(/<sheet\b([^>]*)\/?>/g)].map((m) => ({
+    nome: decodificar((m[1].match(/\bname="([^"]*)"/) || [])[1] || ""),
+    rid: (m[1].match(/\br:id="([^"]*)"/) || m[1].match(/\bid="([^"]*)"/) || [])[1]
+  }));
+  if (!abas.length) throw new Error("a planilha n\xE3o tem abas");
+  let aba = opts.planilha ? abas.find((a) => a.nome.trim().toLowerCase() === opts.planilha.trim().toLowerCase()) : abas[0];
+  if (!aba) throw new Error(`aba "${opts.planilha}" n\xE3o encontrada (abas: ${abas.map((a) => a.nome).join(", ")})`);
+  let caminho = ([...(await zip.file("xl/_rels/workbook.xml.rels")?.async("string") || "").matchAll(/<Relationship\b([^>]*)\/?>/g)].map((m) => m[1]).find((r) => (r.match(/\bId="([^"]*)"/) || [])[1] === aba.rid)?.match(/\bTarget="([^"]*)"/) || [])[1] || `worksheets/sheet${abas.indexOf(aba) + 1}.xml`;
+  caminho = caminho.startsWith("/") ? caminho.slice(1) : "xl/" + caminho.replace(/^\.\//, "");
+  let folha = await zip.file(caminho)?.async("string");
+  if (!folha) throw new Error(`n\xE3o foi poss\xEDvel abrir a aba "${aba.nome}"`);
+  let compartilhados = [...(await zip.file("xl/sharedStrings.xml")?.async("string") || "").matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g)].map((m) => textos(m[1])), estilos = await zip.file("xl/styles.xml")?.async("string") || "", formatos = /* @__PURE__ */ new Map();
+  for (let m of estilos.matchAll(/<numFmt\b[^>]*numFmtId="(\d+)"[^>]*formatCode="([^"]*)"/g)) formatos.set(Number(m[1]), decodificar(m[2]));
+  let estiloEhData = [...((estilos.match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/) || [])[1] || "").matchAll(/<xf\b([^>]*)\/?>/g)].map((m) => {
+    let id = Number((m[1].match(/numFmtId="(\d+)"/) || [])[1] || 0);
+    return DATAS_PADRAO.has(id) || formatos.has(id) && formatoEhData(formatos.get(id));
+  }), linhas = [], dados = (folha.match(/<sheetData\b[^>]*>([\s\S]*?)<\/sheetData>/) || [])[1] || "", numeroAnterior = 0;
+  for (let rm of dados.matchAll(/<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g)) {
+    let numero = Number((rm[1].match(/\br="(\d+)"/) || [])[1] || numeroAnterior + 1);
+    numeroAnterior = numero;
+    let valores = [], colAnterior = -1;
+    for (let cm of (rm[2] || "").matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+      let attrs = cm[1], ref = (attrs.match(/\br="([A-Z]+\d+)"/i) || [])[1], col = ref ? colunaParaIndice(ref) : colAnterior + 1;
+      colAnterior = col;
+      let tipo = (attrs.match(/\bt="([^"]*)"/) || [])[1] || "n", estilo = Number((attrs.match(/\bs="(\d+)"/) || [])[1] || 0), corpo = cm[2] || "", v = (corpo.match(/<v>([\s\S]*?)<\/v>/) || [])[1], valor = null;
+      if (tipo === "s") valor = v !== void 0 ? compartilhados[Number(v)] ?? "" : null;
+      else if (tipo === "inlineStr") valor = textos(corpo);
+      else if (tipo === "str") valor = v !== void 0 ? decodificar(v) : null;
+      else if (tipo === "b") valor = v === "1";
+      else if (tipo === "e") valor = null;
+      else if (tipo === "d") valor = v ?? null;
+      else if (v !== void 0 && v !== "") {
+        let n = Number(v);
+        valor = estiloEhData[estilo] && isFinite(n) ? serialParaData(n) : n;
+      }
+      valores[col] = valor;
+    }
+    linhas.push({ numero, valores });
+  }
+  let preenchidas = (vs) => vs.filter((x) => x != null && String(x).trim() !== "").length, cab = opts.linhaCabecalho ? linhas.find((l) => l.numero === opts.linhaCabecalho) : linhas.find((l) => preenchidas(l.valores) >= 2);
+  if (!cab) throw new Error(opts.linhaCabecalho ? `linha ${opts.linhaCabecalho} n\xE3o encontrada na aba "${aba.nome}"` : `a aba "${aba.nome}" est\xE1 vazia`);
+  let usados = /* @__PURE__ */ new Map(), nomes = Array.from({ length: cab.valores.length }, (_, i) => {
+    let nome = String(cab.valores[i] ?? "").replace(/\s+/g, " ").trim() || `coluna_${i + 1}`, k = nome.toLowerCase(), n = (usados.get(k) || 0) + 1;
+    return usados.set(k, n), n > 1 && (nome = `${nome}_${n}`), nome;
+  }), registros = [];
+  for (let l of linhas) {
+    if (l.numero <= cab.numero || !preenchidas(l.valores)) continue;
+    let r = {};
+    nomes.forEach((nome, i) => {
+      r[nome] = l.valores[i] ?? null;
+    }), registros.push(r);
+  }
+  return registros;
+}
+var import_jszip, ENT, DATAS_PADRAO, init_xlsx = __esm({
+  "automation/xlsx.ts"() {
+    import_jszip = __toESM(require_lib3(), 1), ENT = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+    DATAS_PADRAO = /* @__PURE__ */ new Set([14, 15, 16, 17, 18, 19, 20, 21, 22, 27, 30, 36, 45, 46, 47, 50, 57]);
+  }
+});
+
+// automation/tratador.ts
+function numeroPonto(v) {
+  if (typeof v == "number") return isFinite(v) ? v : null;
+  let s = String(v ?? "").trim();
+  if (s === "") return null;
+  let n = Number(s);
+  return isFinite(n) ? n : null;
+}
+function numeroBr(v) {
+  if (typeof v == "number") return isFinite(v) ? v : null;
+  if (v == null) return null;
+  let s = String(v).trim().replace(/^R\$\s*/i, "").replace(/\s|%/g, "");
+  if (s === "" || s === "-") return null;
+  /^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s) || /^-?\d+,\d+$/.test(s) ? s = s.replace(/\./g, "").replace(",", ".") : /^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s) && (s = s.replace(/,/g, ""));
+  let n = Number(s);
+  return isFinite(n) ? n : null;
+}
+var normalizarNome, Tratador, init_tratador = __esm({
+  "automation/tratador.ts"() {
+    normalizarNome = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(), Tratador = class {
+      constructor(t, municipios = [], agora = /* @__PURE__ */ new Date()) {
+        this.t = t;
+        this.linhas = [];
+        this.grupos = /* @__PURE__ */ new Map();
+        this.naoReconhecidos = /* @__PURE__ */ new Set();
+        this.codigos = /* @__PURE__ */ new Map();
+        this.descartadosMes = 0;
+        this.nLinhas = 0;
+        this.porNome = new Map(municipios.map((m) => [normalizarNome(m.nome), m])), this.porCodigo = new Map(municipios.map((m) => [String(m.codigo), m]));
+        let brt2 = new Date(agora.getTime() - 3 * 36e5);
+        this.anoAtual = brt2.getUTCFullYear(), this.mesAtual = brt2.getUTCMonth() + 1;
+      }
+      /** Houve linhas do mês em andamento descartadas? (o resultado vale só neste mês) */
+      get descartouMesEmAndamento() {
+        return this.descartadosMes > 0;
+      }
+      /** Trata uma linha; devolve null se ela deve ser descartada. */
+      linha(r) {
+        let t = this.t;
+        if (!t) return r;
+        if (t.filtrar) {
+          for (let [col, val] of Object.entries(t.filtrar))
+            if (!(Array.isArray(val) ? val : [val]).map((x) => String(x)).includes(String(r[col] ?? "").trim())) return null;
+        }
+        let ren = t.renomear || {}, o = {};
+        for (let k in r) o[ren[k] || k] = r[k];
+        for (let c of t.texto || []) typeof o[c] == "string" && (o[c] = o[c].replace(/\s+/g, " ").trim());
+        let paraNumero = t.decimal === "ponto" ? numeroPonto : numeroBr;
+        if (t.numeros_br_automaticos)
+          for (let k in o) {
+            let v = o[k];
+            if (typeof v != "string") continue;
+            let s = v.trim();
+            /^-?0\d/.test(s) || (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s) || /^-?\d+,\d+$/.test(s) ? o[k] = numeroBr(s) : /^-?\d{1,15}$/.test(s) && (o[k] = Number(s)));
+          }
+        for (let c of t.numeros || []) c in o && (o[c] = paraNumero(o[c]));
+        for (let c of t.inteiros || []) if (c in o) {
+          let n = paraNumero(o[c]);
+          o[c] = n === null ? null : Math.round(n);
+        }
+        if (t.data_para_ano_mes && t.data_para_ano_mes.coluna in o) {
+          let d = String(o[t.data_para_ano_mes.coluna] ?? "").trim(), br = d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/), iso = d.match(/^(\d{4})-(\d{2})-(\d{2})/), ano = br ? Number(br[3]) : iso ? Number(iso[1]) : null, mes = br ? Number(br[2]) : iso ? Number(iso[2]) : null;
+          o[t.data_para_ano_mes.mes] = mes && mes >= 1 && mes <= 12 ? mes : null, t.data_para_ano_mes.ano && (o[t.data_para_ano_mes.ano] === void 0 || o[t.data_para_ano_mes.ano] === null || o[t.data_para_ano_mes.ano] === "") && (o[t.data_para_ano_mes.ano] = ano);
+        }
+        if (t.municipio && t.municipio.coluna in o) {
+          let m = this.porNome.get(normalizarNome(o[t.municipio.coluna]));
+          m ? (o[t.municipio.coluna] = m.nome, t.municipio.codigo_ibge && (o[t.municipio.codigo_ibge] = m.codigo)) : o[t.municipio.coluna] && (this.porNome.size && this.naoReconhecidos.add(String(o[t.municipio.coluna])), t.municipio.codigo_ibge && (o[t.municipio.codigo_ibge] = null)), t.municipio.codigo_ibge && this.codigos.set(String(o[t.municipio.coluna]), o[t.municipio.codigo_ibge] ?? null);
+        }
+        if (t.municipio_por_codigo && t.municipio_por_codigo.coluna in o) {
+          let cod = String(o[t.municipio_por_codigo.coluna] ?? "").trim(), m = this.porCodigo.get(cod);
+          o[t.municipio_por_codigo.nome] = m ? m.nome : null, !m && cod && this.porCodigo.size && /^\d{7}$/.test(cod) && this.naoReconhecidos.add(`c\xF3digo ${cod}`);
+        }
+        for (let c of t.descartar_vazias || []) if (o[c] === null || o[c] === void 0 || String(o[c]).trim() === "") return null;
+        if (t.descartar_mes_em_andamento) {
+          let { ano, mes } = t.descartar_mes_em_andamento;
+          if (Number(o[ano]) === this.anoAtual && Number(o[mes]) === this.mesAtual)
+            return this.descartadosMes++, null;
+        }
+        return o;
+      }
+      adicionar(o) {
+        if (!o) return;
+        this.nLinhas++;
+        let g = this.t?.agrupar;
+        if (!g || !g.por?.length) {
+          this.linhas.push(o);
+          return;
+        }
+        let chave = JSON.stringify(g.por.map((c) => o[c] ?? null)), e = this.grupos.get(chave);
+        e || (e = { base: Object.fromEntries(g.por.map((c) => [c, o[c] ?? null])), soma: {}, nMedia: {}, n: 0 }, this.grupos.set(chave, e)), e.n++;
+        for (let c of [...g.somar || [], ...g.media || []]) {
+          let v = typeof o[c] == "number" ? o[c] : numeroBr(o[c]);
+          v !== null && (e.soma[c] = (e.soma[c] || 0) + v, e.nMedia[c] = (e.nMedia[c] || 0) + 1);
+        }
+      }
+      parcial() {
+        return {
+          versao: 1,
+          ...this.t?.agrupar?.por?.length ? { grupos: [...this.grupos.entries()] } : { linhas: this.linhas },
+          naoReconhecidos: [...this.naoReconhecidos],
+          codigos: [...this.codigos.entries()],
+          descartadosMes: this.descartadosMes,
+          nLinhas: this.nLinhas
+        };
+      }
+      mesclar(p) {
+        for (let [chave, g] of p.grupos || []) {
+          let e = this.grupos.get(chave);
+          if (!e) {
+            this.grupos.set(chave, { base: { ...g.base }, soma: { ...g.soma }, nMedia: { ...g.nMedia }, n: g.n });
+            continue;
+          }
+          e.n += g.n;
+          for (let c in g.soma) e.soma[c] = (e.soma[c] || 0) + g.soma[c];
+          for (let c in g.nMedia) e.nMedia[c] = (e.nMedia[c] || 0) + g.nMedia[c];
+        }
+        for (let r of p.linhas || []) this.linhas.push(r);
+        for (let n of p.naoReconhecidos) this.naoReconhecidos.add(n);
+        for (let [k, v] of p.codigos) this.codigos.set(k, v);
+        this.descartadosMes += p.descartadosMes, this.nLinhas += p.nLinhas;
+      }
+      finalizar() {
+        let t = this.t, avisos = [], out, g = t?.agrupar;
+        if (g && g.por?.length ? (out = [...this.grupos.values()].map((e) => {
+          let o = { ...e.base };
+          t.municipio?.codigo_ibge && !g.por.includes(t.municipio.codigo_ibge) && g.por.includes(t.municipio.coluna) && (o[t.municipio.codigo_ibge] = this.codigos.get(String(e.base[t.municipio.coluna])) ?? null);
+          for (let c of g.somar || []) o[c] = Math.round((e.soma[c] || 0) * 100) / 100;
+          for (let c of g.media || []) o[c] = e.nMedia[c] ? Math.round(e.soma[c] / e.nMedia[c] * 100) / 100 : null;
+          return g.contar && (o[g.contar] = e.n), o;
+        }), avisos.push(`Agrupado: ${this.nLinhas.toLocaleString("pt-BR")} linhas viraram ${out.length.toLocaleString("pt-BR")} (por ${g.por.join(", ")}).`)) : out = this.linhas, t?.manter && t.manter.length) {
+          let keep = [...t.manter, ...t.municipio?.codigo_ibge ? [t.municipio.codigo_ibge] : []];
+          out = out.map((r) => Object.fromEntries(keep.filter((k) => k in r).map((k) => [k, r[k]])));
+        }
+        if (this.descartadosMes && avisos.push(`Agrupado-info: ${this.descartadosMes} ${this.descartadosMes === 1 ? "lan\xE7amento" : "lan\xE7amentos"} do m\xEAs em andamento (${String(this.mesAtual).padStart(2, "0")}/${this.anoAtual}) ${this.descartadosMes === 1 ? "ficou" : "ficaram"} de fora.`), this.naoReconhecidos.size) {
+          let lista = [...this.naoReconhecidos];
+          avisos.push(`Munic\xEDpios n\xE3o reconhecidos (mantidos como vieram, sem c\xF3digo IBGE): ${lista.slice(0, 10).join(", ")}${lista.length > 10 ? "\u2026" : ""}`);
+        }
+        return { registros: out, avisos };
+      }
+    };
+  }
+});
+
 // src/lib/ibgeFormatos.ts
 function ehIbgeAgregados(d) {
   return Array.isArray(d) && d.length > 0 && d.every((v) => v && typeof v == "object" && "variavel" in v && Array.isArray(v.resultados));
@@ -12246,6 +12567,348 @@ function dashboardFilterKit() {
 var filterKit, init_dashboardFilters = __esm({
   "src/lib/dashboardFilters.ts"() {
     filterKit = dashboardFilterKit();
+  }
+});
+
+// automation/pipeline.ts
+import { createHash as createHash2 } from "crypto";
+import { gzipSync } from "zlib";
+import { Readable } from "stream";
+import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3, writeFileSync as writeFileSync2 } from "fs";
+import { basename as basename2, dirname as dirname2, join as join3 } from "path";
+function criarFetcher(opts = {}) {
+  let inatividadeMs = opts.inatividadeMs ?? 12e4, totalMs = opts.totalMs ?? 45 * 6e4, tentativas = opts.tentativas ?? 5, esperaBase = opts.esperaMs ?? (process.env.DD_TESTE_RAPIDO ? 50 : 5e3), MB = (n) => (n / 1048576).toFixed(1).replace(".", ",");
+  return async (url, o) => {
+    let limite = o?.totalMs ?? totalMs, fim = Date.now() + limite, folga = Math.min(6e4, limite / 4), feitas = 0, partes = [], recebido = 0, esperado = 0, aceitaRetomar = !1, status = 200, finalUrl = url, ultimo;
+    for (let i = 1; i <= tentativas; i++) {
+      feitas = i;
+      let ctrl = new AbortController(), motivo = "", parado, rearmar = () => {
+        parado && clearTimeout(parado), parado = setTimeout(() => {
+          motivo = `o servidor ficou ${Math.round(inatividadeMs / 1e3)} segundos sem enviar dados`, ctrl.abort();
+        }, inatividadeMs);
+      }, restante = Math.max(1e3, fim - Date.now()), teto = setTimeout(() => {
+        motivo = `passou de ${Math.round(restante / 6e4)} minutos, o tempo que restava nesta execu\xE7\xE3o (o portal est\xE1 lento); a automa\xE7\xE3o tenta de novo na pr\xF3xima execu\xE7\xE3o`, ctrl.abort();
+      }, restante);
+      rearmar();
+      try {
+        let retomando = recebido > 0 && aceitaRetomar;
+        recebido > 0 && !retomando && (partes.length = 0, recebido = 0);
+        let headers = { "User-Agent": "DataDash-Automacao/1.0 (+jornalismo de dados)" };
+        retomando && (headers.Range = `bytes=${recebido}-`);
+        let res = await fetch(url, { redirect: "follow", signal: ctrl.signal, headers });
+        if (retomando && res.status !== 206 && (partes.length = 0, recebido = 0), res.status !== 206 && (status = res.status, esperado = Number(res.headers.get("content-length") || 0), aceitaRetomar = /bytes/i.test(res.headers.get("accept-ranges") || "")), finalUrl = res.url || url, esperado > MAX_BYTES) throw new Error(`arquivo grande demais (${Math.round(esperado / 1048576)} MB; limite de ${Math.round(MAX_BYTES / 1048576)} MB)`);
+        if (retomando && res.status === 206 && console.log(`  retomando o download a partir de ${MB(recebido)} MB`), res.body) {
+          let leitor = res.body.getReader();
+          for (; ; ) {
+            let { done, value } = await leitor.read();
+            if (done) break;
+            if (rearmar(), recebido += value.length, recebido > MAX_BYTES)
+              throw ctrl.abort(), new Error(`arquivo grande demais (mais de ${Math.round(MAX_BYTES / 1048576)} MB)`);
+            partes.push(Buffer.from(value));
+          }
+        }
+        if (esperado && recebido < esperado && status < 400) throw new Error("terminated");
+        return { status, body: Buffer.concat(partes, recebido), finalUrl };
+      } catch (e) {
+        if (ultimo = motivo ? new Error(`download interrompido: ${motivo}`) : e, motivo.startsWith("passou de")) break;
+        let msg2 = String(e?.message || "") + String(e?.cause?.code || "") + String(e?.cause?.message || "");
+        if (!(!/ECONNREFUSED|ENOTFOUND|CERT_|certificate/i.test(msg2) && /fetch failed|terminated|other side closed|UND_ERR|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket|sem enviar dados/i.test(msg2 + (motivo || ""))) || i === tentativas || Date.now() > fim - folga) break;
+        let espera = esperaBase * i;
+        console.log(`  o download foi interrompido (${MB(recebido)} MB recebidos${esperado ? ` de ${MB(esperado)} MB` : ""}); tentativa ${i + 1} de ${tentativas} em ${Math.round(espera / 1e3)} s${aceitaRetomar ? ", retomando de onde parou" : ""}`), await new Promise((r) => setTimeout(r, espera));
+      } finally {
+        clearTimeout(teto), parado && clearTimeout(parado);
+      }
+    }
+    let causa = ultimo?.cause?.code ? ` (${ultimo.cause.code})` : "", msg = String(ultimo?.message || ultimo);
+    throw msg === "fetch failed" ? new Error(`n\xE3o foi poss\xEDvel conectar ao endere\xE7o${causa}`) : /^terminated$|other side closed/i.test(msg) ? new Error(`a conex\xE3o com o portal caiu durante o download (${MB(recebido)} MB recebidos${esperado ? ` de ${MB(esperado)} MB` : ""}, depois de ${feitas} ${feitas === 1 ? "tentativa" : "tentativas"}); a automa\xE7\xE3o tenta de novo na pr\xF3xima execu\xE7\xE3o`) : new Error(msg);
+  };
+}
+function sha256(buf) {
+  return createHash2("sha256").update(buf).digest("hex");
+}
+function detectarFormato(f, body, url) {
+  if (f.formato && f.formato !== "auto") return f.formato;
+  if (body.length > 4 && body[0] === 80 && body[1] === 75)
+    return /\.xlsx(\?|$)/i.test(url) || body.includes("xl/workbook.xml") ? "xlsx" : "zip";
+  let head = body.subarray(0, 200).toString("utf-8").trimStart();
+  return head.startsWith("{") || head.startsWith("[") || /\.json(\?|$)/i.test(url) ? "json" : "csv";
+}
+function carimbo(now) {
+  return new Date(now.getTime() - 108e5).toISOString().slice(0, 16).replace("T", "_").replace(":", "");
+}
+function resolverUrl(url, now, municipios = []) {
+  if (/\{\{MUNICIPIOS_ES\}\}/i.test(url)) {
+    if (municipios.length < 70) throw new Error("o endere\xE7o usa {{MUNICIPIOS_ES}}, mas a lista de munic\xEDpios do IBGE n\xE3o est\xE1 dispon\xEDvel nesta execu\xE7\xE3o");
+    url = url.replace(/\{\{MUNICIPIOS_ES\}\}/gi, municipios.map((m) => m.codigo).join("|"));
+  }
+  let pt = url.replace(/\{\{ANO_ANTERIOR\}\}/gi, "{{PREV_YYYY}}").replace(/\{\{MES_ANTERIOR\}\}/gi, "{{PREV_MM}}").replace(/\{\{ANO\}\}/gi, "{{YYYY}}").replace(/\{\{MES\}\}/gi, "{{MM}}").replace(/\{\{DIA\}\}/gi, "{{DD}}");
+  return resolveDynamicUrl(pt, now);
+}
+async function recursosCkan(f, now, fetcher) {
+  let c = f.ckan, api = `${c.portal.replace(/\/$/, "")}/api/3/action/package_show?id=${encodeURIComponent(c.conjunto)}`, res = await fetcher(api);
+  if (res.status >= 400) throw new Error(`o portal respondeu HTTP ${res.status} ao listar o conjunto "${c.conjunto}"`);
+  let json;
+  try {
+    json = JSON.parse(res.body.toString("utf-8"));
+  } catch {
+    throw new Error("o portal n\xE3o respondeu no formato da API CKAN");
+  }
+  if (!json?.success || !Array.isArray(json.result?.resources)) throw new Error(`conjunto "${c.conjunto}" n\xE3o encontrado no portal`);
+  let alvo = c.recurso ? normalizarNome(resolverUrl(c.recurso, now)) : "", lista = json.result.resources.filter((r) => r && r.url).map((r) => ({ nome: String(r.name || r.url.split("/").pop()), url: String(r.url), formato: String(r.format || "").toLowerCase(), atualizadoEm: String(r.last_modified || r.metadata_modified || r.created || "") })).filter((r) => !c.formato || r.formato === c.formato.toLowerCase() || r.url.toLowerCase().split("?")[0].endsWith("." + c.formato.toLowerCase())).filter((r) => !alvo || normalizarNome(r.nome).includes(alvo) || normalizarNome(r.url.split("/").pop() || "").includes(alvo));
+  if (c.combinar && c.ano_minimo && (lista = lista.filter((r) => {
+    let a = anoDe(r.nome) ?? anoDe(r.url);
+    return a === null || a >= c.ano_minimo;
+  })), !lista.length) throw new Error(`nenhum arquivo do conjunto "${c.conjunto}" corresponde a ${c.recurso ? `"${resolverUrl(c.recurso, now)}"` : "o formato pedido"} (o portal pode ainda n\xE3o ter publicado)`);
+  return lista.sort((a, b) => b.atualizadoEm.localeCompare(a.atualizadoEm)), c.combinar ? lista.sort((a, b) => (anoDe(a.nome) ?? anoDe(a.url) ?? 0) - (anoDe(b.nome) ?? anoDe(b.url) ?? 0)) : [lista[0]];
+}
+async function baixarParte(f, nome, url, fetcher, totalMs) {
+  let res = await fetcher(url, totalMs ? { totalMs } : void 0);
+  if (res.status >= 400) throw new Error(`a fonte respondeu HTTP ${res.status} (${url})`);
+  if (!res.body.length) throw new Error(`a fonte respondeu vazio (${nome})`);
+  let head = res.body.subarray(0, 300).toString("utf-8").trimStart().toLowerCase();
+  if (head.startsWith("<!doctype") || head.startsWith("<html"))
+    throw new Error(`a URL devolveu uma p\xE1gina da web, n\xE3o um arquivo de dados (o endere\xE7o pode ter mudado): ${url}`);
+  return { nome, body: res.body, formato: detectarFormato(f, res.body, res.finalUrl), finalUrl: res.finalUrl, hash: sha256(res.body) };
+}
+async function carregarMunicipios(dir, fetcher) {
+  let path = join3(dir, "referencias", "municipios-es.json");
+  if (existsSync3(path)) return JSON.parse(readFileSync3(path, "utf-8"));
+  let res = await fetcher("https://servicodados.ibge.gov.br/api/v1/localidades/estados/32/municipios");
+  if (res.status >= 400) throw new Error(`IBGE respondeu HTTP ${res.status}`);
+  let lista = JSON.parse(res.body.toString("utf-8")).map((m) => ({ codigo: String(m.id), nome: m.nome }));
+  if (lista.length < 70) throw new Error(`lista do IBGE incompleta (${lista.length} munic\xEDpios)`);
+  return mkdirSync2(dirname2(path), { recursive: !0 }), writeFileSync2(path, JSON.stringify(lista, null, 2)), lista;
+}
+function decodificar2(body) {
+  let txt = body.toString(codificacao(body) === "utf-8" ? "utf-8" : "latin1");
+  return txt.charCodeAt(0) === 65279 ? txt.slice(1) : txt;
+}
+function codificacao(body) {
+  let amostra = body.subarray(0, 2097152);
+  if (body.length > amostra.length) {
+    let nl = amostra.lastIndexOf(10);
+    nl > 0 && (amostra = amostra.subarray(0, nl));
+  }
+  let txt = new TextDecoder("utf-8").decode(amostra), invalidos = 0, acentosValidos = 0;
+  for (let ch of txt)
+    ch === "\uFFFD" ? invalidos++ : ch.charCodeAt(0) > 127 && ch.charCodeAt(0) !== 65279 && acentosValidos++;
+  return invalidos === 0 ? "utf-8" : acentosValidos === 0 || invalidos > acentosValidos ? "windows-1252" : "utf-8";
+}
+function* pedacosDeTexto(body) {
+  let dec = new TextDecoder(codificacao(body)), PEDACO = 8 * 1048576, primeiro = !0;
+  for (let i = 0; i < body.length; i += PEDACO) {
+    let t = dec.decode(body.subarray(i, Math.min(i + PEDACO, body.length)), { stream: i + PEDACO < body.length });
+    primeiro && (t.charCodeAt(0) === 65279 && (t = t.slice(1)), primeiro = !1), t && (yield t);
+  }
+  let resto = dec.decode();
+  resto && (yield resto);
+}
+function colunasDeTexto(f) {
+  let t = f.tratamento || {}, inverso = {};
+  for (let [orig, novo] of Object.entries(t.renomear || {})) inverso[String(novo)] = orig;
+  let nomes = /* @__PURE__ */ new Set([
+    ...t.texto || [],
+    ...Object.entries(t.tipos || {}).filter(([, v]) => v === "category" || v === "string").map(([k]) => k),
+    ...t.municipio_por_codigo ? [t.municipio_por_codigo.coluna] : []
+  ]), saida = /* @__PURE__ */ new Set();
+  for (let n of nomes)
+    saida.add(n), inverso[n] && saida.add(inverso[n]);
+  for (let k of Object.keys(t.filtrar || {})) saida.add(k);
+  return saida;
+}
+async function lerLinhas(f, body, formato, aoLer) {
+  let n = 0;
+  if (formato === "csv") {
+    let texto = colunasDeTexto(f);
+    return await new Promise((resolve, reject) => {
+      let falhou = !1;
+      import_papaparse2.default.parse(Readable.from(pedacosDeTexto(body)), {
+        header: !0,
+        skipEmptyLines: "greedy",
+        // Com numeros_br_automaticos, nada é convertido aqui: o tratamento converte com cuidado (zeros à esquerda preservados)
+        dynamicTyping: f.tratamento?.numeros_br_automaticos ? !1 : (campo) => !texto.has(String(campo)),
+        delimitersToGuess: [";", "	", ",", "|"],
+        transformHeader: (h) => h.trim(),
+        step: (res, parser) => {
+          if (!falhou)
+            try {
+              n++, aoLer(res.data);
+            } catch (e) {
+              falhou = !0, parser.abort(), reject(e);
+            }
+        },
+        complete: () => {
+          falhou || resolve();
+        },
+        error: (e) => {
+          falhou || (falhou = !0, reject(e));
+        }
+      });
+    }), n;
+  }
+  if (formato === "zip") {
+    let zip = await (await Promise.resolve().then(() => __toESM(require_lib3(), 1))).default.loadAsync(body), textos2 = Object.values(zip.files).filter((e) => !e.dir && /\.(csv|txt|tsv)$/i.test(e.name) && !/(^|\/)(__MACOSX|\.)/.test(e.name)), alvo = f.arquivo_no_zip ? normalizarNome(f.arquivo_no_zip) : "", escolhidos = (alvo ? textos2.filter((e) => normalizarNome(e.name).includes(alvo)) : textos2).sort((a, b) => a.name.localeCompare(b.name));
+    if (escolhidos.length) {
+      for (let e of escolhidos) {
+        let buf = await e.async("nodebuffer");
+        n += await lerLinhas(f, buf, "csv", aoLer);
+      }
+      return n;
+    }
+    if (alvo && textos2.length) throw new Error(`nenhum arquivo dentro do ZIP corresponde a "${f.arquivo_no_zip}" (h\xE1: ${textos2.slice(0, 5).map((e) => e.name).join(", ")})`);
+  }
+  let recs;
+  if (formato === "xlsx") recs = await lerXlsx(body, { planilha: f.planilha, linhaCabecalho: f.linha_cabecalho });
+  else {
+    let payload = formato === "zip" ? { isZip: !0, arrayBuffer: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength), isCsv: !1, rawText: "" } : { isZip: !1, isCsv: !1, rawText: body.toString("utf-8"), data: JSON.parse(decodificar2(body)) };
+    recs = await recordsFromPayload(payload, { zipInternalFile: f.arquivo_no_zip, jsonPath: f.caminho_json });
+  }
+  for (let r of recs)
+    n++, aoLer(r);
+  return n;
+}
+async function processarFonte(f, estado, dir, now, fetcher, municipios, opts = {}) {
+  let inicio = opts.inicio ?? Date.now(), prazo = opts.prazoMs ?? 45 * 6e4, MINIMO_PARA_COMECAR = 10 * 6e4, salvar = () => {
+    try {
+      opts.aoConcluirArquivo?.();
+    } catch {
+    }
+  }, log = (m) => console.log(`[${f.id}] ${m}`), brt2 = new Date(now.getTime() - 3 * 36e5), mesAtual = brt2.toISOString().slice(0, 7), cfg = sha256(JSON.stringify({ t: f.tratamento || null, planilha: f.planilha, cab: f.linha_cabecalho, zip: f.arquivo_no_zip, json: f.caminho_json, formato: f.formato })), podeReaproveitar = !!f.tratamento?.agrupar?.por?.length && !f.dados_pessoais, pastaCache = join3(dir, "estado", "cache", pastaFonte(f)), alvos;
+  if (f.arquivo) alvos = [{ chave: slug(basename2(f.arquivo)), nome: basename2(f.arquivo), local: f.arquivo }];
+  else if (f.ckan) alvos = (await recursosCkan(f, now, fetcher)).map((r) => ({ chave: slug(r.nome), nome: r.nome, url: r.url, atualizadoEm: r.atualizadoEm || void 0 }));
+  else if (f.anos) {
+    alvos = [];
+    for (let ano = Number(f.anos.de); ano <= brt2.getUTCFullYear(); ano++) {
+      let url = resolverUrl((f.url || "").replace(/\{\{(ANO|YYYY)\}\}/gi, String(ano)), now, municipios);
+      alvos.push({ chave: slug(`${f.id}-${ano}`), nome: `${f.id}-${ano}`, url, ano });
+    }
+  } else alvos = [{ chave: slug(f.id), nome: f.id, url: resolverUrl(f.url || "", now, municipios) }];
+  estado.partes = estado.partes || {};
+  let global2 = new Tratador(f.tratamento, municipios, now), hashes = {}, arquivosBrutos = [], avisos = [], urls = [], baixados = 0, reaproveitados = 0, feitos = 0, lerCache = (chave) => {
+    let arq = join3(pastaCache, `${chave}.json`);
+    if (!podeReaproveitar || !existsSync3(arq)) return null;
+    try {
+      let c = JSON.parse(readFileSync3(arq, "utf-8"));
+      return c.cfg !== cfg || c.mesAndamento && c.mesAndamento !== mesAtual ? null : c.parcial;
+    } catch {
+      return null;
+    }
+  };
+  for (let a of alvos) {
+    let prev = estado.partes[a.chave], anoArquivo = anoDe(a.nome) ?? anoDe(a.url || ""), fechado = anoArquivo !== null && anoArquivo < brt2.getUTCFullYear(), prazoConferencia = (a.atualizadoEm ? 30 : 90) * 864e5, conferidoHaPouco = !!prev?.verificadoEm && now.getTime() - new Date(prev.verificadoEm).getTime() < prazoConferencia;
+    if (fechado && conferidoHaPouco && prev?.hash) {
+      let c = lerCache(a.chave);
+      if (c) {
+        global2.mesclar(c), hashes[a.chave] = prev.hash, urls.push(a.url || a.local || ""), reaproveitados++, feitos++, a.atualizadoEm && prev.atualizadoEm && a.atualizadoEm !== prev.atualizadoEm && (estado.partes[a.chave] = { ...prev, atualizadoEm: a.atualizadoEm }), log(`${a.nome}: ano fechado reaproveitado (conferido em ${prev.verificadoEm.slice(0, 10)})`);
+        continue;
+      }
+    }
+    if (fechado && !a.local) {
+      let motivo = prev?.hash ? conferidoHaPouco ? "resultado guardado n\xE3o encontrado" : "confer\xEAncia peri\xF3dica do conte\xFAdo" : "ainda sem resultado guardado";
+      log(`${a.nome}: ano fechado, baixando (${motivo})`);
+    }
+    let restante = prazo - (Date.now() - inicio);
+    if (!a.local && restante < MINIMO_PARA_COMECAR)
+      return log(`tempo desta execu\xE7\xE3o esgotado; continua na pr\xF3xima (${feitos} de ${alvos.length} arquivos prontos)`), { mudou: !1, incompleto: { feitos, total: alvos.length }, avisos, hash: estado.hash || "", arquivosBrutos, baixados, reaproveitados };
+    let body, finalUrl;
+    if (a.local) {
+      let caminho = join3(dir, a.local);
+      if (!existsSync3(caminho)) throw new Error(`planilha n\xE3o encontrada em ${a.local}. Envie o arquivo pelo site do GitHub para essa pasta, com esse nome.`);
+      if (body = readFileSync3(caminho), finalUrl = a.local, !body.length) throw new Error(`a planilha ${a.local} est\xE1 vazia`);
+    } else {
+      let t0 = Date.now();
+      log(`baixando ${a.nome}\u2026`);
+      let p;
+      try {
+        p = await baixarParte(f, a.nome, a.url, fetcher, Math.max(6e4, prazo - (Date.now() - inicio) - 6e4));
+      } catch (e) {
+        if (a.ano === brt2.getUTCFullYear() && /HTTP 404/.test(String(e?.message))) {
+          log(`${a.nome}: ainda n\xE3o publicado (segue sem ele)`), feitos++;
+          continue;
+        }
+        throw e;
+      }
+      body = p.body, finalUrl = p.finalUrl, baixados++;
+      let seg = Math.round((Date.now() - t0) / 1e3);
+      log(`${a.nome}: ${(body.length / 1048576).toFixed(1).replace(".", ",")} MB em ${seg < 90 ? `${seg} s` : `${Math.round(seg / 60)} min`}`);
+    }
+    let formato = detectarFormato(f, body, finalUrl), hash = sha256(body);
+    if (hashes[a.chave] = hash, urls.push(finalUrl), prev?.hash === hash) {
+      let c = lerCache(a.chave);
+      if (c) {
+        global2.mesclar(c), estado.partes[a.chave] = { ...prev, atualizadoEm: a.atualizadoEm, verificadoEm: now.toISOString() }, feitos++, salvar(), log(`${a.nome}: sem mudan\xE7a`);
+        continue;
+      }
+    }
+    if (!f.dados_pessoais && !a.local && prev?.hash !== hash) {
+      let politica = f.bruto || "auto", comprimido = gzipSync(body), mensal = politica === "mensal" || politica === "auto" && comprimido.length > 5 * 1048576;
+      if (politica !== "nunca" && !(mensal && prev?.brutoMes === mesAtual))
+        if (comprimido.length > MAX_BRUTO_NO_REPO) avisos.push(`"${a.nome}" continua grande demais mesmo compactado (${Math.round(comprimido.length / 1048576)} MB); o bruto desta coleta n\xE3o foi arquivado.`);
+        else {
+          let stamp = carimbo(now), sufixo = alvos.length > 1 ? "__" + a.chave.slice(0, 40) : "", rel = join3("bruto", pastaFonte(f), stamp.slice(0, 4), `${stamp}${sufixo}.${formato}.gz`);
+          mkdirSync2(dirname2(join3(dir, rel)), { recursive: !0 }), writeFileSync2(join3(dir, rel), comprimido), arquivosBrutos.push(rel), estado.partes[a.chave] = { ...estado.partes[a.chave] || {}, brutoMes: mesAtual };
+        }
+    }
+    a.local && arquivosBrutos.push(a.local);
+    let tp = new Tratador(f.tratamento, municipios, now), lidas = await lerLinhas(f, body, formato, (r) => tp.adicionar(tp.linha(r)));
+    if (!lidas) throw new Error(`nenhum registro lido de "${a.nome}"`);
+    let parcial = tp.parcial();
+    podeReaproveitar && (mkdirSync2(pastaCache, { recursive: !0 }), writeFileSync2(join3(pastaCache, `${a.chave}.json`), JSON.stringify({ cfg, mesAndamento: tp.descartouMesEmAndamento ? mesAtual : null, parcial }))), global2.mesclar(parcial), estado.partes[a.chave] = { ...estado.partes[a.chave] || {}, hash, atualizadoEm: a.atualizadoEm, verificadoEm: now.toISOString() }, feitos++, salvar(), log(`${a.nome}: tratado (${lidas.toLocaleString("pt-BR")} linhas lidas) e guardado`);
+  }
+  let assinatura = sha256(Object.keys(hashes).sort().map((k) => `${k}:${hashes[k]}`).join("|") + "|" + cfg + (f.tratamento?.descartar_mes_em_andamento ? "|" + mesAtual : ""));
+  if (estado.hash === assinatura) return { mudou: !1, avisos, hash: assinatura, arquivosBrutos, baixados, reaproveitados };
+  let { registros, avisos: avisosTrat } = global2.finalizar();
+  if (!registros.length) throw new Error("nenhum registro restou depois do tratamento (confira o filtro e os nomes das colunas)");
+  return { mudou: !0, final: montarFinal(f, registros, urls, assinatura, now.toISOString()), avisos: [...avisosTrat, ...avisos], hash: assinatura, arquivosBrutos, baixados, reaproveitados };
+}
+function montarFinal(f, registros, urls, hash, coletadoEm) {
+  let amostra = registros.length > 5e3 ? registros.filter((_, i) => i % Math.ceil(registros.length / 5e3) === 0) : registros, analisado = analyzeDataset(f.nome, amostra.map((r) => ({ ...r })), "automacao"), forcar = { ...f.tratamento?.tipos || {} };
+  f.tratamento?.municipio?.codigo_ibge && (forcar[f.tratamento.municipio.codigo_ibge] = "category");
+  for (let c of analisado.columns) forcar[c.key] && (c.type = forcar[c.key]);
+  for (let [col, tipo] of Object.entries(forcar))
+    if (tipo === "category" || tipo === "string") for (let r of registros) r[col] !== null && r[col] !== void 0 && (r[col] = String(r[col]));
+  let dadosAte, ct = f.colunas_tempo;
+  return ct && (ct.ano || ct.data) && (dadosAte = filterKit.computeFilterModel(registros, {
+    year: ct.ano ? { enabled: !0, column: ct.ano } : void 0,
+    lastUpdate: { show: !0, monthColumn: ct.mes, dateColumn: ct.data }
+  }).lastData?.label), {
+    meta: {
+      fonte: f.nome,
+      credito: f.fonte_credito,
+      url_origem: urls.join(" "),
+      coletado_em: coletadoEm,
+      dados_ate: dadosAte,
+      linhas: registros.length,
+      hash_bruto: hash,
+      gerado_por: "DataDash Studio \xB7 automa\xE7\xE3o"
+    },
+    colunas: analisado.columns.map((c) => ({ chave: c.key, rotulo: c.label, tipo: c.type })),
+    registros
+  };
+}
+function gravarFinal(dir, pasta, final) {
+  let path = join3(dir, "final", `${pasta}.json`), texto = JSON.stringify(final, null, 1) + `
+`;
+  return existsSync3(path) && readFileSync3(path, "utf-8") === texto ? !1 : (mkdirSync2(dirname2(path), { recursive: !0 }), writeFileSync2(path, texto), !0);
+}
+var import_papaparse2, MAX_BYTES, MAX_BRUTO_NO_REPO, fetchPadrao, anoDe, slug, init_pipeline = __esm({
+  "automation/pipeline.ts"() {
+    import_papaparse2 = __toESM(require_papaparse(), 1);
+    init_config();
+    init_xlsx();
+    init_tratador();
+    init_tratador();
+    init_syncCore();
+    init_syncSchedule();
+    init_dataParser();
+    init_dashboardFilters();
+    MAX_BYTES = 3 * 1024 * 1024 * 1024, MAX_BRUTO_NO_REPO = 90 * 1024 * 1024;
+    fetchPadrao = criarFetcher();
+    anoDe = (s) => {
+      let m = s.match(/(?:^|\D)(19\d{2}|20\d{2})(?:\D|$)/);
+      return m ? Number(m[1]) : null;
+    };
+    slug = (s) => normalizarNome(s).replace(/ /g, "-").slice(0, 60) || "arquivo";
   }
 });
 
@@ -15126,22 +15789,22 @@ __export(publish_exports, {
   publicarProjetos: () => publicarProjetos,
   slugProjeto: () => slugProjeto
 });
-import { createHash as createHash2 } from "crypto";
-import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3, rmSync, writeFileSync as writeFileSync2 } from "fs";
-import { dirname as dirname2, join as join3 } from "path";
+import { createHash as createHash3 } from "crypto";
+import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync4, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "fs";
+import { dirname as dirname3, join as join4 } from "path";
 function slugProjeto(p) {
   return (p.slug || p.name).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || p.id;
 }
 function carregarVendor(appDir) {
-  let nm = join3(appDir, "node_modules");
+  let nm = join4(appDir, "node_modules");
   return {
-    chartJs: readFileSync3(join3(nm, "chart.js/dist/chart.umd.min.js"), "utf-8"),
-    tailwind: readFileSync3(join3(nm, "@tailwindcss/browser/dist/index.global.js"), "utf-8")
+    chartJs: readFileSync4(join4(nm, "chart.js/dist/chart.umd.min.js"), "utf-8"),
+    tailwind: readFileSync4(join4(nm, "@tailwindcss/browser/dist/index.global.js"), "utf-8")
   };
 }
 async function publicarProjetos(opts) {
-  let alvo = (await opts.source.listProjects()).filter((p) => opts.ids && opts.ids.length ? opts.ids.includes(p.id) : p.publishConfig?.autoPublish === !0), anterior = existsSync3(opts.estadoPath) ? JSON.parse(readFileSync3(opts.estadoPath, "utf-8")) : {}, novo = {}, res = { projetos: [], mudou: !1 };
-  rmSync(opts.saida, { recursive: !0, force: !0 }), mkdirSync2(opts.saida, { recursive: !0 });
+  let alvo = (await opts.source.listProjects()).filter((p) => opts.ids && opts.ids.length ? opts.ids.includes(p.id) : p.publishConfig?.autoPublish === !0), anterior = existsSync4(opts.estadoPath) ? JSON.parse(readFileSync4(opts.estadoPath, "utf-8")) : {}, novo = {}, res = { projetos: [], mudou: !1 };
+  rmSync2(opts.saida, { recursive: !0, force: !0 }), mkdirSync3(opts.saida, { recursive: !0 });
   for (let p of alvo) {
     let dashboards = (await opts.source.listDashboards(p.id)).filter((d) => d.status !== "draft" && d.status !== "archived");
     if (!dashboards.length) continue;
@@ -15149,10 +15812,10 @@ async function publicarProjetos(opts) {
     dashboards.forEach((d) => {
       ids.add(d.datasetId), (d.charts || []).forEach((c) => c.datasetId && ids.add(c.datasetId));
     });
-    let datasets = (await Promise.all([...ids].map((id) => opts.source.loadDataset(id)))).filter(Boolean), recordsMap = Object.fromEntries(datasets.map((d) => [d.id, d.records || []])), marcas = [p.updatedAt, ...dashboards.map((d) => d.updatedAt), ...datasets.map((d) => d.lastSyncedAt || d.updatedAt)].filter(Boolean).sort(), now = new Date(marcas[marcas.length - 1] || "2026-01-01T00:00:00Z"), site = buildProjectSite(p, dashboards, datasets, recordsMap, p.headerConfig, { vendor: opts.vendor, now }), slug2 = slugProjeto(p), h = createHash2("sha256");
+    let datasets = (await Promise.all([...ids].map((id) => opts.source.loadDataset(id)))).filter(Boolean), recordsMap = Object.fromEntries(datasets.map((d) => [d.id, d.records || []])), marcas = [p.updatedAt, ...dashboards.map((d) => d.updatedAt), ...datasets.map((d) => d.lastSyncedAt || d.updatedAt)].filter(Boolean).sort(), now = new Date(marcas[marcas.length - 1] || "2026-01-01T00:00:00Z"), site = buildProjectSite(p, dashboards, datasets, recordsMap, p.headerConfig, { vendor: opts.vendor, now }), slug2 = slugProjeto(p), h = createHash3("sha256");
     for (let f of site.files.sort((a, b) => a.path.localeCompare(b.path))) {
-      let path = join3(opts.saida, slug2, f.path);
-      mkdirSync2(dirname2(path), { recursive: !0 }), writeFileSync2(path, f.base64 ? Buffer.from(f.content, "base64") : f.content), h.update(f.path).update(f.content);
+      let path = join4(opts.saida, slug2, f.path);
+      mkdirSync3(dirname3(path), { recursive: !0 }), writeFileSync3(path, f.base64 ? Buffer.from(f.content, "base64") : f.content), h.update(f.path).update(f.content);
     }
     novo[slug2] = h.digest("hex");
     let mudou = anterior[slug2] !== novo[slug2];
@@ -15160,10 +15823,10 @@ async function publicarProjetos(opts) {
   }
   Object.keys(anterior).some((k) => !(k in novo)) && (res.mudou = !0);
   let esc2 = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-  return writeFileSync2(join3(opts.saida, "index.html"), `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Projetos publicados</title>
+  return writeFileSync3(join4(opts.saida, "index.html"), `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Projetos publicados</title>
 <style>body{font-family:system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 16px;color:#1f2933}a{color:#1d4ed8}li{margin:8px 0}</style></head>
 <body><h1>Projetos publicados</h1><ul>${res.projetos.map((p) => `<li><a href="./${p.slug}/">${esc2(p.nome)}</a> (${p.paginas} p\xE1ginas)</li>`).join("")}</ul></body></html>
-`), writeFileSync2(join3(opts.saida, ".nojekyll"), ""), mkdirSync2(dirname2(opts.estadoPath), { recursive: !0 }), writeFileSync2(opts.estadoPath, JSON.stringify(novo, null, 2) + `
+`), writeFileSync3(join4(opts.saida, ".nojekyll"), ""), mkdirSync3(dirname3(opts.estadoPath), { recursive: !0 }), writeFileSync3(opts.estadoPath, JSON.stringify(novo, null, 2) + `
 `), res;
 }
 function adminPublishSource(db, store) {
@@ -15196,16 +15859,50 @@ var init_publish = __esm({
 // automation/conferir.ts
 var conferir_exports = {};
 __export(conferir_exports, {
+  comecoDoArquivo: () => comecoDoArquivo,
+  comecoDoZip: () => comecoDoZip,
   conferirConjuntos: () => conferirConjuntos,
   relatorioConferencia: () => relatorioConferencia
 });
+async function comecoDoZip(url, fetcher) {
+  try {
+    let r = await fetcher(url, { totalMs: 6e5 });
+    if (r.status >= 400) return null;
+    let zip = await (await Promise.resolve().then(() => __toESM(require_lib3(), 1))).default.loadAsync(r.body), textos2 = Object.values(zip.files).filter((e) => !e.dir && /\.(csv|txt|tsv)$/i.test(e.name) && !/(^|\/)(__MACOSX|\.)/.test(e.name)).sort((a, b) => a.name.localeCompare(b.name));
+    if (!textos2.length) return null;
+    let buf = (await textos2[0].async("nodebuffer")).subarray(0, 65536), nl = buf.lastIndexOf(10), corte = nl > 0 ? buf.subarray(0, nl) : buf, txt = new TextDecoder(codificacao(corte)).decode(corte);
+    return txt.charCodeAt(0) === 65279 && (txt = txt.slice(1)), { interno: textos2[0].name, total: textos2.length, linhas: txt.split(/\r?\n/).slice(0, 6).filter((l) => l.trim()).map((l) => l.slice(0, 600)) };
+  } catch {
+    return null;
+  }
+}
+async function comecoDoArquivo(url, bytes = 65536) {
+  let ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), 6e4);
+  try {
+    let r = await fetch(url, { headers: { Range: `bytes=0-${bytes - 1}`, "User-Agent": "DataDash-Automacao/1.0 (+jornalismo de dados)" }, signal: ctrl.signal, redirect: "follow" });
+    if (r.status >= 400 || !r.body) return [];
+    let leitor = r.body.getReader(), partes = [], total = 0;
+    for (; total < bytes; ) {
+      let { done, value } = await leitor.read();
+      if (done) break;
+      partes.push(Buffer.from(value)), total += value.length;
+    }
+    ctrl.abort();
+    let buf = Buffer.concat(partes).subarray(0, bytes), nl = buf.lastIndexOf(10), corte = nl > 0 ? buf.subarray(0, nl) : buf, txt = new TextDecoder(codificacao(corte)).decode(corte);
+    return txt.charCodeAt(0) === 65279 && (txt = txt.slice(1)), txt.split(/\r?\n/).slice(0, 6).filter((l) => l.trim()).map((l) => l.slice(0, 600));
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(t);
+  }
+}
 function sugerir(arquivos) {
   let dados = arquivos.filter((a) => /^(csv|json|zip|xlsx?|txt)$/i.test(a.formato) || /\.(csv|json|zip|xlsx?)(\?|$)/i.test(a.url));
   if (!dados.length) return "Nenhum arquivo de dados (CSV, JSON, ZIP ou Excel) no conjunto.";
   let comAno = dados.filter((a) => a.ano !== null), anos = new Set(comAno.map((a) => a.ano));
   return comAno.length >= 2 && anos.size === comAno.length && comAno.length >= dados.length - 1 ? `Um arquivo por ano (${Math.min(...anos)}\u2013${Math.max(...anos)}): use "Juntar todos os arquivos".` : dados.length === 1 ? "Um \xFAnico arquivo: n\xE3o \xE9 preciso juntar." : `${dados.length} arquivos de assuntos diferentes: cadastre uma fonte para cada, com a parte do nome do arquivo.`;
 }
-async function conferirConjuntos(itens, fetcher) {
+async function conferirConjuntos(itens, fetcher, amostrar = comecoDoArquivo) {
   let vistos = /* @__PURE__ */ new Set(), res = [];
   for (let it of itens) {
     let chave = `${it.portal}|${it.conjunto}`;
@@ -15233,8 +15930,18 @@ async function conferirConjuntos(itens, fetcher) {
         tamanhoMB: typeof x.size == "number" && x.size > 0 ? Math.round(x.size / 1048576 * 10) / 10 : null,
         atualizado: String(x.last_modified || x.metadata_modified || x.created || "").slice(0, 10),
         url: String(x.url || "")
-      })).sort((a, b) => (a.ano ?? 9999) - (b.ano ?? 9999) || a.nome.localeCompare(b.nome));
-      res.push({ ...base, situacao: "existe", titulo: json.result.title, arquivos, sugestao: sugerir(arquivos) });
+      })).sort((a, b) => (a.ano ?? 9999) - (b.ano ?? 9999) || a.nome.localeCompare(b.nome)), recente = [...arquivos.filter((a) => /^(csv|txt)$/i.test(a.formato) || /\.(csv|txt)(\?|$)/i.test(a.url))].sort((a, b) => (b.ano ?? 0) - (a.ano ?? 0) || b.atualizado.localeCompare(a.atualizado))[0], amostra;
+      if (recente?.url) {
+        let linhas = await amostrar(recente.url);
+        linhas.length && (amostra = { arquivo: recente.nome, linhas });
+      } else {
+        let menor = [...arquivos.filter((a) => /^zip$/i.test(a.formato) || /\.zip(\?|$)/i.test(a.url)).filter((a) => a.tamanhoMB === null || a.tamanhoMB <= 300)].sort((a, b) => (a.tamanhoMB ?? 9e9) - (b.tamanhoMB ?? 9e9) || (b.ano ?? 0) - (a.ano ?? 0))[0];
+        if (menor?.url) {
+          let z = await comecoDoZip(menor.url, fetcher);
+          z?.linhas.length && (amostra = { arquivo: `${menor.nome} \u2192 ${z.interno}${z.total > 1 ? ` (1 de ${z.total} arquivos dentro do ZIP)` : ""}`, linhas: z.linhas });
+        }
+      }
+      res.push({ ...base, situacao: "existe", titulo: json.result.title, arquivos, sugestao: sugerir(arquivos), ...amostra ? { amostra } : {} });
     } catch (e) {
       res.push({ ...base, situacao: "erro", erro: String(e?.message || e) });
     }
@@ -15260,13 +15967,14 @@ function relatorioConferencia(res, quando) {
     linhas.push(`### \u2705 ${esc2(r.nome)}`, "", `Conjunto **${r.conjunto}**${r.titulo ? ` (\u201C${esc2(r.titulo)}\u201D)` : ""}. ${r.sugestao}`, ""), linhas.push("| Arquivo | Formato | Ano | Tamanho | Atualizado |", "|---|---|---|---|---|");
     for (let a of r.arquivos.slice(0, 40))
       linhas.push(`| ${esc2(a.nome)} | ${a.formato || "\u2014"} | ${a.ano ?? "\u2014"} | ${a.tamanhoMB !== null ? `${String(a.tamanhoMB).replace(".", ",")} MB` : "\u2014"} | ${a.atualizado || "\u2014"} |`);
-    r.arquivos.length > 40 && linhas.push(`| \u2026 e mais ${r.arquivos.length - 40} arquivos | | | | |`), linhas.push("");
+    r.arquivos.length > 40 && linhas.push(`| \u2026 e mais ${r.arquivos.length - 40} arquivos | | | | |`), linhas.push(""), r.amostra && linhas.push(`Come\xE7o do arquivo ${esc2(r.amostra.arquivo)} (cabe\xE7alho e primeiras linhas):`, "", "```", ...r.amostra.linhas.map((l) => l.replace(/```/g, "'''")), "```", "");
   }
   return linhas.join(`
 `);
 }
 var anoDe2, init_conferir = __esm({
   "automation/conferir.ts"() {
+    init_pipeline();
     anoDe2 = (s) => {
       let m = s.match(/(?:^|\D)(19\d{2}|20\d{2})(?:\D|$)/);
       return m ? Number(m[1]) : null;
@@ -17471,97 +18179,67 @@ var CATALOGO_ORIGINAL, NAO_VERIFICADO, SERIE_BCB, REVISAO, ORIGEM_LISTA, LINK_SE
 });
 
 // automation/run.ts
-import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync3, appendFileSync, renameSync } from "fs";
-import { join as join4, dirname as dirname3 } from "path";
+init_config();
+import { existsSync as existsSync5, mkdirSync as mkdirSync4, readFileSync as readFileSync5, writeFileSync as writeFileSync4, appendFileSync, renameSync } from "fs";
+import { join as join5, dirname as dirname4 } from "path";
 import { fileURLToPath } from "url";
 
-// automation/config.ts
-var import_yaml = __toESM(require_dist(), 1);
-import { existsSync, readdirSync, readFileSync } from "fs";
-import { basename, join } from "path";
-var ID_RE = /^[a-z0-9][a-z0-9-]{1,62}$/;
-function validateConfig(raw) {
-  let errs = [], fontes = Array.isArray(raw.fontes) ? raw.fontes : [];
-  fontes.length || errs.push('fontes.yml: a lista "fontes" est\xE1 vazia.');
-  let ids = /* @__PURE__ */ new Set();
-  if (fontes.forEach((f, i) => {
-    let where = `fontes[${i}]${f && f.id ? ` (${f.id})` : ""}`;
-    if (!f || typeof f != "object") {
-      errs.push(`${where}: item inv\xE1lido.`);
-      return;
-    }
-    ID_RE.test(f.id || "") || errs.push(`${where}: "id" deve ter s\xF3 letras min\xFAsculas, n\xFAmeros e h\xEDfens.`), ids.has(f.id) && errs.push(`${where}: "id" repetido.`), ids.add(f.id), f.nome || errs.push(`${where}: falta "nome".`), [f.url ? 1 : 0, f.ckan ? 1 : 0, f.arquivo ? 1 : 0].reduce((a, b) => a + b, 0) > 1 && errs.push(`${where}: use s\xF3 uma origem: "url", "ckan" ou "arquivo".`), f.sinal_de_novidade !== void 0 && !/^https?:\/\//.test(String(f.sinal_de_novidade)) && errs.push(`${where}: sinal_de_novidade precisa ser um endere\xE7o http(s).`), f.anos && (Number(f.anos.de) >= 1990 && Number(f.anos.de) <= 2100 || errs.push(`${where}: anos.de deve ser um ano (ex.: 2015).`), (!f.url || !/\{\{(ANO|YYYY)\}\}/i.test(f.url)) && errs.push(`${where}: com "anos", a url precisa ter o marcador {{ANO}} no lugar do ano.`)), f.arquivo ? (!/^entrada\/[\w\-./ ]+\.(xlsx|csv|tsv|json|zip)$/i.test(f.arquivo) || f.arquivo.includes("..")) && errs.push(`${where}: "arquivo" deve estar na pasta entrada/ e terminar em .xlsx, .csv, .json ou .zip (ex.: entrada/anuario/pib.xlsx).`) : f.ckan ? (/^https:\/\//.test(f.ckan.portal || "") || errs.push(`${where}: ckan.portal precisa ser um endere\xE7o https:// (ex.: https://dados.es.gov.br).`), (!f.ckan.conjunto || /\//.test(f.ckan.conjunto)) && errs.push(`${where}: ckan.conjunto \xE9 o final do endere\xE7o do conjunto (sem barras), ex.: portal-da-transparencia-receitas.`)) : /^https?:\/\//.test(f.url || "") ? /\/dataset\/[^/]+\/?$/.test(f.url || "") && errs.push(`${where}: a "url" \xE9 a p\xE1gina de um conjunto CKAN, n\xE3o um arquivo. Use o bloco "ckan" (ver exemplo em fontes.yml).`) : errs.push(`${where}: informe a origem: "url" (http:// ou https://), um bloco "ckan" ou "arquivo" (planilha em entrada/).`), /(^|[^{])\{[A-Za-z_]+\}(?!\})/.test(f.url || "") && errs.push(`${where}: na "url", use chaves duplas nos marcadores, ex.: {{ANO}} (n\xE3o {ANO}).`);
-    let fr = f.agenda && f.agenda.frequencia;
-    ["horaria", "diaria", "semanal", "mensal", "anual"].includes(fr) || errs.push(`${where}: agenda.frequencia deve ser horaria, diaria, semanal, mensal ou anual.`), f.agenda?.hora && !/^\d{2}:\d{2}$/.test(f.agenda.hora) && errs.push(`${where}: agenda.hora no formato "06:00".`), fr === "mensal" && !(Number(f.agenda.dia_do_mes) >= 1 && Number(f.agenda.dia_do_mes) <= 31) && errs.push(`${where}: agenda.dia_do_mes (1\u201331) \xE9 obrigat\xF3rio na frequ\xEAncia mensal.`), fr === "semanal" && !(Number(f.agenda.dia_da_semana) >= 0 && Number(f.agenda.dia_da_semana) <= 6) && errs.push(`${where}: agenda.dia_da_semana (0\u20136) \xE9 obrigat\xF3rio na frequ\xEAncia semanal.`);
-  }), errs.length) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
-- ` + errs.join(`
-- `));
-  return { fontes: fontes.map((f) => ({ ativo: !0, formato: "auto", ...f })), publicacao: raw.publicacao || {} };
-}
-var PROJETO_RE = /^[a-z0-9][a-z0-9-]{0,40}$/;
-function loadConfigDir(dir, doApp = []) {
-  let partes = [], raiz = join(dir, "fontes.yml");
-  existsSync(raiz) && partes.push({ arquivo: "fontes.yml", raw: (0, import_yaml.parse)(readFileSync(raiz, "utf-8")) || {} });
-  let pasta = join(dir, "fontes");
-  if (existsSync(pasta))
-    for (let nome of readdirSync(pasta).filter((n) => /\.ya?ml$/i.test(n)).sort()) {
-      let projeto = basename(nome).replace(/\.ya?ml$/i, "");
-      if (!PROJETO_RE.test(projeto)) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
-- fontes/${nome}: o nome do arquivo vira o nome do projeto; use s\xF3 letras min\xFAsculas, n\xFAmeros e h\xEDfens (ex.: anuario.yml).`);
-      partes.push({ arquivo: `fontes/${nome}`, raw: (0, import_yaml.parse)(readFileSync(join(pasta, nome), "utf-8")) || {}, projeto });
-    }
-  if (!partes.length && !doApp.length) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
-- n\xE3o encontrei fontes.yml nem a pasta fontes/ (e nenhuma fonte cadastrada no app).`);
-  let fontes = [], erros = [], publicacao = {};
-  for (let p of partes) {
-    try {
-      let lista = Array.isArray(p.raw.fontes) ? p.raw.fontes : [];
-      if (!lista.length) continue;
-      let cfg = validateConfig({ fontes: lista });
-      for (let f of cfg.fontes)
-        p.projeto && (f.projeto = p.projeto), f.projeto && !PROJETO_RE.test(f.projeto) && erros.push(`${p.arquivo} (${f.id}): "projeto" s\xF3 com letras min\xFAsculas, n\xFAmeros e h\xEDfens.`), f.arquivo && f.projeto && !f.arquivo.startsWith(`entrada/${f.projeto}/`) && erros.push(`${p.arquivo} (${f.id}): a planilha deve ficar em entrada/${f.projeto}/ (est\xE1 em ${f.arquivo}).`), fontes.push(f);
-    } catch (e) {
-      erros.push(...String(e.message).replace(`Configura\xE7\xE3o inv\xE1lida:
-- `, "").split(`
-- `).map((m) => `${p.arquivo}: ${m}`));
-    }
-    p.raw.publicacao && (publicacao = { ...publicacao, ...p.raw.publicacao });
+// automation/exportar.ts
+import { existsSync as existsSync2, mkdirSync, readFileSync as readFileSync2, rmSync, writeFileSync } from "fs";
+import { dirname, join as join2 } from "path";
+import { createHash } from "crypto";
+var CAMINHO_RE = /^app\/[a-z0-9][a-z0-9-]{0,80}$/;
+async function exportarBasesDoApp(dados, fonte, now) {
+  let regPath = join2(dados, "estado", "exportacoes.json"), reg = {};
+  try {
+    reg = JSON.parse(readFileSync2(regPath, "utf-8"));
+  } catch {
   }
-  for (let f of doApp) fontes.push(f);
-  let vistos = /* @__PURE__ */ new Map();
-  for (let f of fontes) {
-    let ja = vistos.get(f.id), onde = f.origem === "app" ? "tela Fontes autom\xE1ticas do app" : f.projeto || "fontes.yml";
-    ja && erros.push(`o id "${f.id}" aparece em mais de uma fonte (${ja} e ${onde}); ids precisam ser \xFAnicos.`), vistos.set(f.id, onde);
-  }
-  if (erros.length) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
-- ` + erros.join(`
-- `));
-  if (!fontes.length) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
-- nenhuma fonte configurada.`);
-  return { fontes, publicacao };
-}
-function validarFontesDoApp(docs) {
-  let fontes = [], erros = [];
-  for (let d of docs) {
-    let cfg = { ...d.config || {}, id: d.id, ativo: d.ativo !== !1 };
-    if (cfg.arquivo) {
-      erros.push({ id: d.id, nome: cfg.nome || d.id, mensagem: "planilhas da pasta entrada/ s\xE3o configuradas nos arquivos do GitHub, n\xE3o no app" });
+  let res = { gravadas: [], iguais: [], removidas: [], erros: [] }, ativos = (await fonte.listarExportaveis()).filter((d) => d.exportarGithub?.ativo), idsAtivos = /* @__PURE__ */ new Set();
+  for (let ds of ativos) {
+    let caminho = ds.exportarGithub.caminho;
+    if (!CAMINHO_RE.test(caminho)) {
+      res.erros.push(`${ds.name}: endere\xE7o inv\xE1lido (${caminho})`);
       continue;
     }
+    idsAtivos.add(ds.id);
     try {
-      let f = validateConfig({ fontes: [cfg] }).fontes[0];
-      if (f.projeto && !PROJETO_RE.test(f.projeto)) throw new Error(`Configura\xE7\xE3o inv\xE1lida:
-- "projeto" s\xF3 com letras min\xFAsculas, n\xFAmeros e h\xEDfens.`);
-      fontes.push({ ...f, origem: "app" });
+      let registros = await fonte.carregarRegistros(ds), corpo = {
+        colunas: (ds.columns || []).map((c) => ({ chave: c.key, rotulo: c.label, tipo: c.type })),
+        registros
+      }, hash = createHash("sha256").update(JSON.stringify(corpo)).digest("hex"), arquivo = join2(dados, "final", `${caminho}.json`), anterior = reg[ds.id];
+      if (anterior && anterior.caminho !== caminho && rmSync(join2(dados, "final", `${anterior.caminho}.json`), { force: !0 }), anterior?.hash === hash && anterior.caminho === caminho && existsSync2(arquivo)) {
+        res.iguais.push(ds.name);
+        continue;
+      }
+      let json = {
+        meta: {
+          fonte: ds.name,
+          ...ds.sourceMeta?.credito ? { credito: ds.sourceMeta.credito } : {},
+          base_do_app: ds.id,
+          exportado_em: now.toISOString(),
+          atualizada_no_app_em: ds.updatedAt,
+          linhas: registros.length,
+          ...ds.sourceMeta?.dadosAte ? { dados_ate: ds.sourceMeta.dadosAte } : {},
+          gerado_por: "DataDash Studio \xB7 base do app publicada no GitHub",
+          publicado_por: ds.exportarGithub.ativadoPor
+        },
+        ...corpo
+      };
+      mkdirSync(dirname(arquivo), { recursive: !0 }), writeFileSync(arquivo, JSON.stringify(json) + `
+`), reg[ds.id] = { caminho, hash, nome: ds.name }, res.gravadas.push(ds.name);
     } catch (e) {
-      erros.push({ id: d.id, nome: cfg.nome || d.id, mensagem: String(e.message).replace(`Configura\xE7\xE3o inv\xE1lida:
-- `, "").replace(/\n- /g, "; ").replace(/fontes\[0\] \([^)]*\): /g, "") });
+      res.erros.push(`${ds.name}: ${e?.message || e}`);
     }
   }
-  return { fontes, erros };
+  for (let [id, r] of Object.entries(reg))
+    idsAtivos.has(id) || (CAMINHO_RE.test(r.caminho) && rmSync(join2(dados, "final", `${r.caminho}.json`), { force: !0 }), res.removidas.push(r.nome), delete reg[id]);
+  return mkdirSync(dirname(regPath), { recursive: !0 }), writeFileSync(regPath, JSON.stringify(reg, null, 2) + `
+`), res;
 }
-function pastaFonte(f) {
-  return f.projeto ? `${f.projeto}/${f.id}` : f.id;
+function resumoExportacao(r) {
+  let partes = [];
+  return r.gravadas.length && partes.push(`atualizadas: ${r.gravadas.join(", ")}`), r.iguais.length && partes.push(`sem mudan\xE7a: ${r.iguais.length}`), r.removidas.length && partes.push(`retiradas: ${r.removidas.join(", ")}`), r.erros.length && partes.push(`erros: ${r.erros.join("; ")}`), partes.length ? `**Bases do app no GitHub:** ${partes.join(" \xB7 ")}` : "";
 }
 
 // automation/schedule.ts
@@ -17617,531 +18295,8 @@ function fonteParada(f, estado, now) {
   return dias > max ? `A fonte "${f.nome}" est\xE1 h\xE1 ${dias} dias sem dado novo (limite configurado: ${max}). Verifique se o endere\xE7o mudou.` : null;
 }
 
-// automation/pipeline.ts
-var import_papaparse2 = __toESM(require_papaparse(), 1);
-import { createHash } from "crypto";
-import { gzipSync } from "zlib";
-import { Readable } from "stream";
-import { existsSync as existsSync2, mkdirSync, readFileSync as readFileSync2, writeFileSync } from "fs";
-import { basename as basename2, dirname, join as join2 } from "path";
-
-// automation/xlsx.ts
-var import_jszip = __toESM(require_lib3(), 1), ENT = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
-function decodificar(s) {
-  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => e[0] === "#" ? String.fromCodePoint(e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)) : ENT[e.toLowerCase()] ?? m);
-}
-function textos(xml) {
-  let out = "";
-  for (let m of xml.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)) out += decodificar(m[1]);
-  return out;
-}
-function colunaParaIndice(ref) {
-  let letras = (ref.match(/^[A-Z]+/i) || ["A"])[0].toUpperCase(), n = 0;
-  for (let c of letras) n = n * 26 + (c.charCodeAt(0) - 64);
-  return n - 1;
-}
-var DATAS_PADRAO = /* @__PURE__ */ new Set([14, 15, 16, 17, 18, 19, 20, 21, 22, 27, 30, 36, 45, 46, 47, 50, 57]);
-function formatoEhData(codigo) {
-  let limpo = codigo.replace(/"[^"]*"/g, "").replace(/\[[^\]]*\]/g, "").replace(/\\./g, "");
-  return /[dy]/i.test(limpo);
-}
-function serialParaData(n) {
-  let ms = Math.round((n - 25569) * 86400 * 1e3), d = new Date(ms), dd = String(d.getUTCDate()).padStart(2, "0"), mm = String(d.getUTCMonth() + 1).padStart(2, "0"), hh = d.getUTCHours(), mi = d.getUTCMinutes(), base = `${dd}/${mm}/${d.getUTCFullYear()}`;
-  return hh || mi ? `${base} ${String(hh).padStart(2, "0")}:${String(mi).padStart(2, "0")}` : base;
-}
-async function lerXlsx(buf, opts = {}) {
-  let zip = await import_jszip.default.loadAsync(buf), wb = await zip.file("xl/workbook.xml")?.async("string");
-  if (!wb) throw new Error("arquivo n\xE3o \xE9 uma planilha .xlsx v\xE1lida (falta xl/workbook.xml)");
-  let abas = [...wb.matchAll(/<sheet\b([^>]*)\/?>/g)].map((m) => ({
-    nome: decodificar((m[1].match(/\bname="([^"]*)"/) || [])[1] || ""),
-    rid: (m[1].match(/\br:id="([^"]*)"/) || m[1].match(/\bid="([^"]*)"/) || [])[1]
-  }));
-  if (!abas.length) throw new Error("a planilha n\xE3o tem abas");
-  let aba = opts.planilha ? abas.find((a) => a.nome.trim().toLowerCase() === opts.planilha.trim().toLowerCase()) : abas[0];
-  if (!aba) throw new Error(`aba "${opts.planilha}" n\xE3o encontrada (abas: ${abas.map((a) => a.nome).join(", ")})`);
-  let caminho = ([...(await zip.file("xl/_rels/workbook.xml.rels")?.async("string") || "").matchAll(/<Relationship\b([^>]*)\/?>/g)].map((m) => m[1]).find((r) => (r.match(/\bId="([^"]*)"/) || [])[1] === aba.rid)?.match(/\bTarget="([^"]*)"/) || [])[1] || `worksheets/sheet${abas.indexOf(aba) + 1}.xml`;
-  caminho = caminho.startsWith("/") ? caminho.slice(1) : "xl/" + caminho.replace(/^\.\//, "");
-  let folha = await zip.file(caminho)?.async("string");
-  if (!folha) throw new Error(`n\xE3o foi poss\xEDvel abrir a aba "${aba.nome}"`);
-  let compartilhados = [...(await zip.file("xl/sharedStrings.xml")?.async("string") || "").matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g)].map((m) => textos(m[1])), estilos = await zip.file("xl/styles.xml")?.async("string") || "", formatos = /* @__PURE__ */ new Map();
-  for (let m of estilos.matchAll(/<numFmt\b[^>]*numFmtId="(\d+)"[^>]*formatCode="([^"]*)"/g)) formatos.set(Number(m[1]), decodificar(m[2]));
-  let estiloEhData = [...((estilos.match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/) || [])[1] || "").matchAll(/<xf\b([^>]*)\/?>/g)].map((m) => {
-    let id = Number((m[1].match(/numFmtId="(\d+)"/) || [])[1] || 0);
-    return DATAS_PADRAO.has(id) || formatos.has(id) && formatoEhData(formatos.get(id));
-  }), linhas = [], dados = (folha.match(/<sheetData\b[^>]*>([\s\S]*?)<\/sheetData>/) || [])[1] || "", numeroAnterior = 0;
-  for (let rm of dados.matchAll(/<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g)) {
-    let numero = Number((rm[1].match(/\br="(\d+)"/) || [])[1] || numeroAnterior + 1);
-    numeroAnterior = numero;
-    let valores = [], colAnterior = -1;
-    for (let cm of (rm[2] || "").matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
-      let attrs = cm[1], ref = (attrs.match(/\br="([A-Z]+\d+)"/i) || [])[1], col = ref ? colunaParaIndice(ref) : colAnterior + 1;
-      colAnterior = col;
-      let tipo = (attrs.match(/\bt="([^"]*)"/) || [])[1] || "n", estilo = Number((attrs.match(/\bs="(\d+)"/) || [])[1] || 0), corpo = cm[2] || "", v = (corpo.match(/<v>([\s\S]*?)<\/v>/) || [])[1], valor = null;
-      if (tipo === "s") valor = v !== void 0 ? compartilhados[Number(v)] ?? "" : null;
-      else if (tipo === "inlineStr") valor = textos(corpo);
-      else if (tipo === "str") valor = v !== void 0 ? decodificar(v) : null;
-      else if (tipo === "b") valor = v === "1";
-      else if (tipo === "e") valor = null;
-      else if (tipo === "d") valor = v ?? null;
-      else if (v !== void 0 && v !== "") {
-        let n = Number(v);
-        valor = estiloEhData[estilo] && isFinite(n) ? serialParaData(n) : n;
-      }
-      valores[col] = valor;
-    }
-    linhas.push({ numero, valores });
-  }
-  let preenchidas = (vs) => vs.filter((x) => x != null && String(x).trim() !== "").length, cab = opts.linhaCabecalho ? linhas.find((l) => l.numero === opts.linhaCabecalho) : linhas.find((l) => preenchidas(l.valores) >= 2);
-  if (!cab) throw new Error(opts.linhaCabecalho ? `linha ${opts.linhaCabecalho} n\xE3o encontrada na aba "${aba.nome}"` : `a aba "${aba.nome}" est\xE1 vazia`);
-  let usados = /* @__PURE__ */ new Map(), nomes = Array.from({ length: cab.valores.length }, (_, i) => {
-    let nome = String(cab.valores[i] ?? "").replace(/\s+/g, " ").trim() || `coluna_${i + 1}`, k = nome.toLowerCase(), n = (usados.get(k) || 0) + 1;
-    return usados.set(k, n), n > 1 && (nome = `${nome}_${n}`), nome;
-  }), registros = [];
-  for (let l of linhas) {
-    if (l.numero <= cab.numero || !preenchidas(l.valores)) continue;
-    let r = {};
-    nomes.forEach((nome, i) => {
-      r[nome] = l.valores[i] ?? null;
-    }), registros.push(r);
-  }
-  return registros;
-}
-
-// automation/tratador.ts
-function numeroPonto(v) {
-  if (typeof v == "number") return isFinite(v) ? v : null;
-  let s = String(v ?? "").trim();
-  if (s === "") return null;
-  let n = Number(s);
-  return isFinite(n) ? n : null;
-}
-function numeroBr(v) {
-  if (typeof v == "number") return isFinite(v) ? v : null;
-  if (v == null) return null;
-  let s = String(v).trim().replace(/^R\$\s*/i, "").replace(/\s|%/g, "");
-  if (s === "" || s === "-") return null;
-  /^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s) || /^-?\d+,\d+$/.test(s) ? s = s.replace(/\./g, "").replace(",", ".") : /^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s) && (s = s.replace(/,/g, ""));
-  let n = Number(s);
-  return isFinite(n) ? n : null;
-}
-var normalizarNome = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(), Tratador = class {
-  constructor(t, municipios = [], agora = /* @__PURE__ */ new Date()) {
-    this.t = t;
-    this.linhas = [];
-    this.grupos = /* @__PURE__ */ new Map();
-    this.naoReconhecidos = /* @__PURE__ */ new Set();
-    this.codigos = /* @__PURE__ */ new Map();
-    this.descartadosMes = 0;
-    this.nLinhas = 0;
-    this.porNome = new Map(municipios.map((m) => [normalizarNome(m.nome), m])), this.porCodigo = new Map(municipios.map((m) => [String(m.codigo), m]));
-    let brt2 = new Date(agora.getTime() - 3 * 36e5);
-    this.anoAtual = brt2.getUTCFullYear(), this.mesAtual = brt2.getUTCMonth() + 1;
-  }
-  /** Houve linhas do mês em andamento descartadas? (o resultado vale só neste mês) */
-  get descartouMesEmAndamento() {
-    return this.descartadosMes > 0;
-  }
-  /** Trata uma linha; devolve null se ela deve ser descartada. */
-  linha(r) {
-    let t = this.t;
-    if (!t) return r;
-    if (t.filtrar) {
-      for (let [col, val] of Object.entries(t.filtrar))
-        if (!(Array.isArray(val) ? val : [val]).map((x) => String(x)).includes(String(r[col] ?? "").trim())) return null;
-    }
-    let ren = t.renomear || {}, o = {};
-    for (let k in r) o[ren[k] || k] = r[k];
-    for (let c of t.texto || []) typeof o[c] == "string" && (o[c] = o[c].replace(/\s+/g, " ").trim());
-    let paraNumero = t.decimal === "ponto" ? numeroPonto : numeroBr;
-    for (let c of t.numeros || []) c in o && (o[c] = paraNumero(o[c]));
-    for (let c of t.inteiros || []) if (c in o) {
-      let n = paraNumero(o[c]);
-      o[c] = n === null ? null : Math.round(n);
-    }
-    if (t.municipio && t.municipio.coluna in o) {
-      let m = this.porNome.get(normalizarNome(o[t.municipio.coluna]));
-      m ? (o[t.municipio.coluna] = m.nome, t.municipio.codigo_ibge && (o[t.municipio.codigo_ibge] = m.codigo)) : o[t.municipio.coluna] && (this.porNome.size && this.naoReconhecidos.add(String(o[t.municipio.coluna])), t.municipio.codigo_ibge && (o[t.municipio.codigo_ibge] = null)), t.municipio.codigo_ibge && this.codigos.set(String(o[t.municipio.coluna]), o[t.municipio.codigo_ibge] ?? null);
-    }
-    if (t.municipio_por_codigo && t.municipio_por_codigo.coluna in o) {
-      let cod = String(o[t.municipio_por_codigo.coluna] ?? "").trim(), m = this.porCodigo.get(cod);
-      o[t.municipio_por_codigo.nome] = m ? m.nome : null, !m && cod && this.porCodigo.size && /^\d{7}$/.test(cod) && this.naoReconhecidos.add(`c\xF3digo ${cod}`);
-    }
-    for (let c of t.descartar_vazias || []) if (o[c] === null || o[c] === void 0 || String(o[c]).trim() === "") return null;
-    if (t.descartar_mes_em_andamento) {
-      let { ano, mes } = t.descartar_mes_em_andamento;
-      if (Number(o[ano]) === this.anoAtual && Number(o[mes]) === this.mesAtual)
-        return this.descartadosMes++, null;
-    }
-    return o;
-  }
-  adicionar(o) {
-    if (!o) return;
-    this.nLinhas++;
-    let g = this.t?.agrupar;
-    if (!g || !g.por?.length) {
-      this.linhas.push(o);
-      return;
-    }
-    let chave = JSON.stringify(g.por.map((c) => o[c] ?? null)), e = this.grupos.get(chave);
-    e || (e = { base: Object.fromEntries(g.por.map((c) => [c, o[c] ?? null])), soma: {}, nMedia: {}, n: 0 }, this.grupos.set(chave, e)), e.n++;
-    for (let c of [...g.somar || [], ...g.media || []]) {
-      let v = typeof o[c] == "number" ? o[c] : numeroBr(o[c]);
-      v !== null && (e.soma[c] = (e.soma[c] || 0) + v, e.nMedia[c] = (e.nMedia[c] || 0) + 1);
-    }
-  }
-  parcial() {
-    return {
-      versao: 1,
-      ...this.t?.agrupar?.por?.length ? { grupos: [...this.grupos.entries()] } : { linhas: this.linhas },
-      naoReconhecidos: [...this.naoReconhecidos],
-      codigos: [...this.codigos.entries()],
-      descartadosMes: this.descartadosMes,
-      nLinhas: this.nLinhas
-    };
-  }
-  mesclar(p) {
-    for (let [chave, g] of p.grupos || []) {
-      let e = this.grupos.get(chave);
-      if (!e) {
-        this.grupos.set(chave, { base: { ...g.base }, soma: { ...g.soma }, nMedia: { ...g.nMedia }, n: g.n });
-        continue;
-      }
-      e.n += g.n;
-      for (let c in g.soma) e.soma[c] = (e.soma[c] || 0) + g.soma[c];
-      for (let c in g.nMedia) e.nMedia[c] = (e.nMedia[c] || 0) + g.nMedia[c];
-    }
-    for (let r of p.linhas || []) this.linhas.push(r);
-    for (let n of p.naoReconhecidos) this.naoReconhecidos.add(n);
-    for (let [k, v] of p.codigos) this.codigos.set(k, v);
-    this.descartadosMes += p.descartadosMes, this.nLinhas += p.nLinhas;
-  }
-  finalizar() {
-    let t = this.t, avisos = [], out, g = t?.agrupar;
-    if (g && g.por?.length ? (out = [...this.grupos.values()].map((e) => {
-      let o = { ...e.base };
-      t.municipio?.codigo_ibge && !g.por.includes(t.municipio.codigo_ibge) && g.por.includes(t.municipio.coluna) && (o[t.municipio.codigo_ibge] = this.codigos.get(String(e.base[t.municipio.coluna])) ?? null);
-      for (let c of g.somar || []) o[c] = Math.round((e.soma[c] || 0) * 100) / 100;
-      for (let c of g.media || []) o[c] = e.nMedia[c] ? Math.round(e.soma[c] / e.nMedia[c] * 100) / 100 : null;
-      return g.contar && (o[g.contar] = e.n), o;
-    }), avisos.push(`Agrupado: ${this.nLinhas.toLocaleString("pt-BR")} linhas viraram ${out.length.toLocaleString("pt-BR")} (por ${g.por.join(", ")}).`)) : out = this.linhas, t?.manter && t.manter.length) {
-      let keep = [...t.manter, ...t.municipio?.codigo_ibge ? [t.municipio.codigo_ibge] : []];
-      out = out.map((r) => Object.fromEntries(keep.filter((k) => k in r).map((k) => [k, r[k]])));
-    }
-    if (this.descartadosMes && avisos.push(`Agrupado-info: ${this.descartadosMes} ${this.descartadosMes === 1 ? "lan\xE7amento" : "lan\xE7amentos"} do m\xEAs em andamento (${String(this.mesAtual).padStart(2, "0")}/${this.anoAtual}) ${this.descartadosMes === 1 ? "ficou" : "ficaram"} de fora.`), this.naoReconhecidos.size) {
-      let lista = [...this.naoReconhecidos];
-      avisos.push(`Munic\xEDpios n\xE3o reconhecidos (mantidos como vieram, sem c\xF3digo IBGE): ${lista.slice(0, 10).join(", ")}${lista.length > 10 ? "\u2026" : ""}`);
-    }
-    return { registros: out, avisos };
-  }
-};
-
-// automation/pipeline.ts
-init_syncCore();
-init_syncSchedule();
-init_dataParser();
-init_dashboardFilters();
-var MAX_BYTES = 3 * 1024 * 1024 * 1024, MAX_BRUTO_NO_REPO = 90 * 1024 * 1024;
-function criarFetcher(opts = {}) {
-  let inatividadeMs = opts.inatividadeMs ?? 12e4, totalMs = opts.totalMs ?? 45 * 6e4, tentativas = opts.tentativas ?? 5, esperaBase = opts.esperaMs ?? (process.env.DD_TESTE_RAPIDO ? 50 : 5e3), MB = (n) => (n / 1048576).toFixed(1).replace(".", ",");
-  return async (url, o) => {
-    let limite = o?.totalMs ?? totalMs, fim = Date.now() + limite, folga = Math.min(6e4, limite / 4), feitas = 0, partes = [], recebido = 0, esperado = 0, aceitaRetomar = !1, status = 200, finalUrl = url, ultimo;
-    for (let i = 1; i <= tentativas; i++) {
-      feitas = i;
-      let ctrl = new AbortController(), motivo = "", parado, rearmar = () => {
-        parado && clearTimeout(parado), parado = setTimeout(() => {
-          motivo = `o servidor ficou ${Math.round(inatividadeMs / 1e3)} segundos sem enviar dados`, ctrl.abort();
-        }, inatividadeMs);
-      }, restante = Math.max(1e3, fim - Date.now()), teto = setTimeout(() => {
-        motivo = `passou de ${Math.round(restante / 6e4)} minutos, o tempo que restava nesta execu\xE7\xE3o (o portal est\xE1 lento); a automa\xE7\xE3o tenta de novo na pr\xF3xima execu\xE7\xE3o`, ctrl.abort();
-      }, restante);
-      rearmar();
-      try {
-        let retomando = recebido > 0 && aceitaRetomar;
-        recebido > 0 && !retomando && (partes.length = 0, recebido = 0);
-        let headers = { "User-Agent": "DataDash-Automacao/1.0 (+jornalismo de dados)" };
-        retomando && (headers.Range = `bytes=${recebido}-`);
-        let res = await fetch(url, { redirect: "follow", signal: ctrl.signal, headers });
-        if (retomando && res.status !== 206 && (partes.length = 0, recebido = 0), res.status !== 206 && (status = res.status, esperado = Number(res.headers.get("content-length") || 0), aceitaRetomar = /bytes/i.test(res.headers.get("accept-ranges") || "")), finalUrl = res.url || url, esperado > MAX_BYTES) throw new Error(`arquivo grande demais (${Math.round(esperado / 1048576)} MB; limite de ${Math.round(MAX_BYTES / 1048576)} MB)`);
-        if (retomando && res.status === 206 && console.log(`  retomando o download a partir de ${MB(recebido)} MB`), res.body) {
-          let leitor = res.body.getReader();
-          for (; ; ) {
-            let { done, value } = await leitor.read();
-            if (done) break;
-            if (rearmar(), recebido += value.length, recebido > MAX_BYTES)
-              throw ctrl.abort(), new Error(`arquivo grande demais (mais de ${Math.round(MAX_BYTES / 1048576)} MB)`);
-            partes.push(Buffer.from(value));
-          }
-        }
-        if (esperado && recebido < esperado && status < 400) throw new Error("terminated");
-        return { status, body: Buffer.concat(partes, recebido), finalUrl };
-      } catch (e) {
-        if (ultimo = motivo ? new Error(`download interrompido: ${motivo}`) : e, motivo.startsWith("passou de")) break;
-        let msg2 = String(e?.message || "") + String(e?.cause?.code || "") + String(e?.cause?.message || "");
-        if (!(!/ECONNREFUSED|ENOTFOUND|CERT_|certificate/i.test(msg2) && /fetch failed|terminated|other side closed|UND_ERR|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket|sem enviar dados/i.test(msg2 + (motivo || ""))) || i === tentativas || Date.now() > fim - folga) break;
-        let espera = esperaBase * i;
-        console.log(`  o download foi interrompido (${MB(recebido)} MB recebidos${esperado ? ` de ${MB(esperado)} MB` : ""}); tentativa ${i + 1} de ${tentativas} em ${Math.round(espera / 1e3)} s${aceitaRetomar ? ", retomando de onde parou" : ""}`), await new Promise((r) => setTimeout(r, espera));
-      } finally {
-        clearTimeout(teto), parado && clearTimeout(parado);
-      }
-    }
-    let causa = ultimo?.cause?.code ? ` (${ultimo.cause.code})` : "", msg = String(ultimo?.message || ultimo);
-    throw msg === "fetch failed" ? new Error(`n\xE3o foi poss\xEDvel conectar ao endere\xE7o${causa}`) : /^terminated$|other side closed/i.test(msg) ? new Error(`a conex\xE3o com o portal caiu durante o download (${MB(recebido)} MB recebidos${esperado ? ` de ${MB(esperado)} MB` : ""}, depois de ${feitas} ${feitas === 1 ? "tentativa" : "tentativas"}); a automa\xE7\xE3o tenta de novo na pr\xF3xima execu\xE7\xE3o`) : new Error(msg);
-  };
-}
-var fetchPadrao = criarFetcher();
-function sha256(buf) {
-  return createHash("sha256").update(buf).digest("hex");
-}
-function detectarFormato(f, body, url) {
-  if (f.formato && f.formato !== "auto") return f.formato;
-  if (body.length > 4 && body[0] === 80 && body[1] === 75)
-    return /\.xlsx(\?|$)/i.test(url) || body.includes("xl/workbook.xml") ? "xlsx" : "zip";
-  let head = body.subarray(0, 200).toString("utf-8").trimStart();
-  return head.startsWith("{") || head.startsWith("[") || /\.json(\?|$)/i.test(url) ? "json" : "csv";
-}
-function carimbo(now) {
-  return new Date(now.getTime() - 108e5).toISOString().slice(0, 16).replace("T", "_").replace(":", "");
-}
-function resolverUrl(url, now, municipios = []) {
-  if (/\{\{MUNICIPIOS_ES\}\}/i.test(url)) {
-    if (municipios.length < 70) throw new Error("o endere\xE7o usa {{MUNICIPIOS_ES}}, mas a lista de munic\xEDpios do IBGE n\xE3o est\xE1 dispon\xEDvel nesta execu\xE7\xE3o");
-    url = url.replace(/\{\{MUNICIPIOS_ES\}\}/gi, municipios.map((m) => m.codigo).join("|"));
-  }
-  let pt = url.replace(/\{\{ANO_ANTERIOR\}\}/gi, "{{PREV_YYYY}}").replace(/\{\{MES_ANTERIOR\}\}/gi, "{{PREV_MM}}").replace(/\{\{ANO\}\}/gi, "{{YYYY}}").replace(/\{\{MES\}\}/gi, "{{MM}}").replace(/\{\{DIA\}\}/gi, "{{DD}}");
-  return resolveDynamicUrl(pt, now);
-}
-var anoDe = (s) => {
-  let m = s.match(/(?:^|\D)(19\d{2}|20\d{2})(?:\D|$)/);
-  return m ? Number(m[1]) : null;
-};
-async function recursosCkan(f, now, fetcher) {
-  let c = f.ckan, api = `${c.portal.replace(/\/$/, "")}/api/3/action/package_show?id=${encodeURIComponent(c.conjunto)}`, res = await fetcher(api);
-  if (res.status >= 400) throw new Error(`o portal respondeu HTTP ${res.status} ao listar o conjunto "${c.conjunto}"`);
-  let json;
-  try {
-    json = JSON.parse(res.body.toString("utf-8"));
-  } catch {
-    throw new Error("o portal n\xE3o respondeu no formato da API CKAN");
-  }
-  if (!json?.success || !Array.isArray(json.result?.resources)) throw new Error(`conjunto "${c.conjunto}" n\xE3o encontrado no portal`);
-  let alvo = c.recurso ? normalizarNome(resolverUrl(c.recurso, now)) : "", lista = json.result.resources.filter((r) => r && r.url).map((r) => ({ nome: String(r.name || r.url.split("/").pop()), url: String(r.url), formato: String(r.format || "").toLowerCase(), atualizadoEm: String(r.last_modified || r.metadata_modified || r.created || "") })).filter((r) => !c.formato || r.formato === c.formato.toLowerCase() || r.url.toLowerCase().split("?")[0].endsWith("." + c.formato.toLowerCase())).filter((r) => !alvo || normalizarNome(r.nome).includes(alvo) || normalizarNome(r.url.split("/").pop() || "").includes(alvo));
-  if (c.combinar && c.ano_minimo && (lista = lista.filter((r) => {
-    let a = anoDe(r.nome) ?? anoDe(r.url);
-    return a === null || a >= c.ano_minimo;
-  })), !lista.length) throw new Error(`nenhum arquivo do conjunto "${c.conjunto}" corresponde a ${c.recurso ? `"${resolverUrl(c.recurso, now)}"` : "o formato pedido"} (o portal pode ainda n\xE3o ter publicado)`);
-  return lista.sort((a, b) => b.atualizadoEm.localeCompare(a.atualizadoEm)), c.combinar ? lista.sort((a, b) => (anoDe(a.nome) ?? anoDe(a.url) ?? 0) - (anoDe(b.nome) ?? anoDe(b.url) ?? 0)) : [lista[0]];
-}
-async function baixarParte(f, nome, url, fetcher, totalMs) {
-  let res = await fetcher(url, totalMs ? { totalMs } : void 0);
-  if (res.status >= 400) throw new Error(`a fonte respondeu HTTP ${res.status} (${url})`);
-  if (!res.body.length) throw new Error(`a fonte respondeu vazio (${nome})`);
-  let head = res.body.subarray(0, 300).toString("utf-8").trimStart().toLowerCase();
-  if (head.startsWith("<!doctype") || head.startsWith("<html"))
-    throw new Error(`a URL devolveu uma p\xE1gina da web, n\xE3o um arquivo de dados (o endere\xE7o pode ter mudado): ${url}`);
-  return { nome, body: res.body, formato: detectarFormato(f, res.body, res.finalUrl), finalUrl: res.finalUrl, hash: sha256(res.body) };
-}
-async function carregarMunicipios(dir, fetcher) {
-  let path = join2(dir, "referencias", "municipios-es.json");
-  if (existsSync2(path)) return JSON.parse(readFileSync2(path, "utf-8"));
-  let res = await fetcher("https://servicodados.ibge.gov.br/api/v1/localidades/estados/32/municipios");
-  if (res.status >= 400) throw new Error(`IBGE respondeu HTTP ${res.status}`);
-  let lista = JSON.parse(res.body.toString("utf-8")).map((m) => ({ codigo: String(m.id), nome: m.nome }));
-  if (lista.length < 70) throw new Error(`lista do IBGE incompleta (${lista.length} munic\xEDpios)`);
-  return mkdirSync(dirname(path), { recursive: !0 }), writeFileSync(path, JSON.stringify(lista, null, 2)), lista;
-}
-function decodificar2(body) {
-  let txt = body.toString(codificacao(body) === "utf-8" ? "utf-8" : "latin1");
-  return txt.charCodeAt(0) === 65279 ? txt.slice(1) : txt;
-}
-function codificacao(body) {
-  return (new TextDecoder("utf-8").decode(body.subarray(0, 2097152)).match(/\uFFFD/g) || []).length > 5 ? "windows-1252" : "utf-8";
-}
-function* pedacosDeTexto(body) {
-  let dec = new TextDecoder(codificacao(body)), PEDACO = 8 * 1048576, primeiro = !0;
-  for (let i = 0; i < body.length; i += PEDACO) {
-    let t = dec.decode(body.subarray(i, Math.min(i + PEDACO, body.length)), { stream: i + PEDACO < body.length });
-    primeiro && (t.charCodeAt(0) === 65279 && (t = t.slice(1)), primeiro = !1), t && (yield t);
-  }
-  let resto = dec.decode();
-  resto && (yield resto);
-}
-function colunasDeTexto(f) {
-  let t = f.tratamento || {}, inverso = {};
-  for (let [orig, novo] of Object.entries(t.renomear || {})) inverso[String(novo)] = orig;
-  let nomes = /* @__PURE__ */ new Set([
-    ...t.texto || [],
-    ...Object.entries(t.tipos || {}).filter(([, v]) => v === "category" || v === "string").map(([k]) => k),
-    ...t.municipio_por_codigo ? [t.municipio_por_codigo.coluna] : []
-  ]), saida = /* @__PURE__ */ new Set();
-  for (let n of nomes)
-    saida.add(n), inverso[n] && saida.add(inverso[n]);
-  for (let k of Object.keys(t.filtrar || {})) saida.add(k);
-  return saida;
-}
-async function lerLinhas(f, body, formato, aoLer) {
-  let n = 0;
-  if (formato === "csv") {
-    let texto = colunasDeTexto(f);
-    return await new Promise((resolve, reject) => {
-      let falhou = !1;
-      import_papaparse2.default.parse(Readable.from(pedacosDeTexto(body)), {
-        header: !0,
-        skipEmptyLines: "greedy",
-        dynamicTyping: (campo) => !texto.has(String(campo)),
-        delimitersToGuess: [";", "	", ",", "|"],
-        transformHeader: (h) => h.trim(),
-        step: (res, parser) => {
-          if (!falhou)
-            try {
-              n++, aoLer(res.data);
-            } catch (e) {
-              falhou = !0, parser.abort(), reject(e);
-            }
-        },
-        complete: () => {
-          falhou || resolve();
-        },
-        error: (e) => {
-          falhou || (falhou = !0, reject(e));
-        }
-      });
-    }), n;
-  }
-  let recs;
-  if (formato === "xlsx") recs = await lerXlsx(body, { planilha: f.planilha, linhaCabecalho: f.linha_cabecalho });
-  else {
-    let payload = formato === "zip" ? { isZip: !0, arrayBuffer: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength), isCsv: !1, rawText: "" } : { isZip: !1, isCsv: !1, rawText: body.toString("utf-8"), data: JSON.parse(decodificar2(body)) };
-    recs = await recordsFromPayload(payload, { zipInternalFile: f.arquivo_no_zip, jsonPath: f.caminho_json });
-  }
-  for (let r of recs)
-    n++, aoLer(r);
-  return n;
-}
-var slug = (s) => normalizarNome(s).replace(/ /g, "-").slice(0, 60) || "arquivo";
-async function processarFonte(f, estado, dir, now, fetcher, municipios, opts = {}) {
-  let inicio = opts.inicio ?? Date.now(), prazo = opts.prazoMs ?? 45 * 6e4, MINIMO_PARA_COMECAR = 10 * 6e4, salvar = () => {
-    try {
-      opts.aoConcluirArquivo?.();
-    } catch {
-    }
-  }, log = (m) => console.log(`[${f.id}] ${m}`), brt2 = new Date(now.getTime() - 3 * 36e5), mesAtual = brt2.toISOString().slice(0, 7), cfg = sha256(JSON.stringify({ t: f.tratamento || null, planilha: f.planilha, cab: f.linha_cabecalho, zip: f.arquivo_no_zip, json: f.caminho_json, formato: f.formato })), podeReaproveitar = !!f.tratamento?.agrupar?.por?.length && !f.dados_pessoais, pastaCache = join2(dir, "estado", "cache", pastaFonte(f)), alvos;
-  if (f.arquivo) alvos = [{ chave: slug(basename2(f.arquivo)), nome: basename2(f.arquivo), local: f.arquivo }];
-  else if (f.ckan) alvos = (await recursosCkan(f, now, fetcher)).map((r) => ({ chave: slug(r.nome), nome: r.nome, url: r.url, atualizadoEm: r.atualizadoEm || void 0 }));
-  else if (f.anos) {
-    alvos = [];
-    for (let ano = Number(f.anos.de); ano <= brt2.getUTCFullYear(); ano++) {
-      let url = resolverUrl((f.url || "").replace(/\{\{(ANO|YYYY)\}\}/gi, String(ano)), now, municipios);
-      alvos.push({ chave: slug(`${f.id}-${ano}`), nome: `${f.id}-${ano}`, url, ano });
-    }
-  } else alvos = [{ chave: slug(f.id), nome: f.id, url: resolverUrl(f.url || "", now, municipios) }];
-  estado.partes = estado.partes || {};
-  let global2 = new Tratador(f.tratamento, municipios, now), hashes = {}, arquivosBrutos = [], avisos = [], urls = [], baixados = 0, reaproveitados = 0, feitos = 0, lerCache = (chave) => {
-    let arq = join2(pastaCache, `${chave}.json`);
-    if (!podeReaproveitar || !existsSync2(arq)) return null;
-    try {
-      let c = JSON.parse(readFileSync2(arq, "utf-8"));
-      return c.cfg !== cfg || c.mesAndamento && c.mesAndamento !== mesAtual ? null : c.parcial;
-    } catch {
-      return null;
-    }
-  };
-  for (let a of alvos) {
-    let prev = estado.partes[a.chave], anoArquivo = anoDe(a.nome) ?? anoDe(a.url || ""), fechado = anoArquivo !== null && anoArquivo < brt2.getUTCFullYear(), prazoConferencia = (a.atualizadoEm ? 30 : 90) * 864e5, conferidoHaPouco = !!prev?.verificadoEm && now.getTime() - new Date(prev.verificadoEm).getTime() < prazoConferencia;
-    if (fechado && conferidoHaPouco && prev?.hash) {
-      let c = lerCache(a.chave);
-      if (c) {
-        global2.mesclar(c), hashes[a.chave] = prev.hash, urls.push(a.url || a.local || ""), reaproveitados++, feitos++, a.atualizadoEm && prev.atualizadoEm && a.atualizadoEm !== prev.atualizadoEm && (estado.partes[a.chave] = { ...prev, atualizadoEm: a.atualizadoEm }), log(`${a.nome}: ano fechado reaproveitado (conferido em ${prev.verificadoEm.slice(0, 10)})`);
-        continue;
-      }
-    }
-    if (fechado && !a.local) {
-      let motivo = prev?.hash ? conferidoHaPouco ? "resultado guardado n\xE3o encontrado" : "confer\xEAncia peri\xF3dica do conte\xFAdo" : "ainda sem resultado guardado";
-      log(`${a.nome}: ano fechado, baixando (${motivo})`);
-    }
-    let restante = prazo - (Date.now() - inicio);
-    if (!a.local && restante < MINIMO_PARA_COMECAR)
-      return log(`tempo desta execu\xE7\xE3o esgotado; continua na pr\xF3xima (${feitos} de ${alvos.length} arquivos prontos)`), { mudou: !1, incompleto: { feitos, total: alvos.length }, avisos, hash: estado.hash || "", arquivosBrutos, baixados, reaproveitados };
-    let body, finalUrl;
-    if (a.local) {
-      let caminho = join2(dir, a.local);
-      if (!existsSync2(caminho)) throw new Error(`planilha n\xE3o encontrada em ${a.local}. Envie o arquivo pelo site do GitHub para essa pasta, com esse nome.`);
-      if (body = readFileSync2(caminho), finalUrl = a.local, !body.length) throw new Error(`a planilha ${a.local} est\xE1 vazia`);
-    } else {
-      let t0 = Date.now();
-      log(`baixando ${a.nome}\u2026`);
-      let p;
-      try {
-        p = await baixarParte(f, a.nome, a.url, fetcher, Math.max(6e4, prazo - (Date.now() - inicio) - 6e4));
-      } catch (e) {
-        if (a.ano === brt2.getUTCFullYear() && /HTTP 404/.test(String(e?.message))) {
-          log(`${a.nome}: ainda n\xE3o publicado (segue sem ele)`), feitos++;
-          continue;
-        }
-        throw e;
-      }
-      body = p.body, finalUrl = p.finalUrl, baixados++;
-      let seg = Math.round((Date.now() - t0) / 1e3);
-      log(`${a.nome}: ${(body.length / 1048576).toFixed(1).replace(".", ",")} MB em ${seg < 90 ? `${seg} s` : `${Math.round(seg / 60)} min`}`);
-    }
-    let formato = detectarFormato(f, body, finalUrl), hash = sha256(body);
-    if (hashes[a.chave] = hash, urls.push(finalUrl), prev?.hash === hash) {
-      let c = lerCache(a.chave);
-      if (c) {
-        global2.mesclar(c), estado.partes[a.chave] = { ...prev, atualizadoEm: a.atualizadoEm, verificadoEm: now.toISOString() }, feitos++, salvar(), log(`${a.nome}: sem mudan\xE7a`);
-        continue;
-      }
-    }
-    if (!f.dados_pessoais && !a.local && prev?.hash !== hash) {
-      let politica = f.bruto || "auto", comprimido = gzipSync(body), mensal = politica === "mensal" || politica === "auto" && comprimido.length > 5 * 1048576;
-      if (politica !== "nunca" && !(mensal && prev?.brutoMes === mesAtual))
-        if (comprimido.length > MAX_BRUTO_NO_REPO) avisos.push(`"${a.nome}" continua grande demais mesmo compactado (${Math.round(comprimido.length / 1048576)} MB); o bruto desta coleta n\xE3o foi arquivado.`);
-        else {
-          let stamp = carimbo(now), sufixo = alvos.length > 1 ? "__" + a.chave.slice(0, 40) : "", rel = join2("bruto", pastaFonte(f), stamp.slice(0, 4), `${stamp}${sufixo}.${formato}.gz`);
-          mkdirSync(dirname(join2(dir, rel)), { recursive: !0 }), writeFileSync(join2(dir, rel), comprimido), arquivosBrutos.push(rel), estado.partes[a.chave] = { ...estado.partes[a.chave] || {}, brutoMes: mesAtual };
-        }
-    }
-    a.local && arquivosBrutos.push(a.local);
-    let tp = new Tratador(f.tratamento, municipios, now), lidas = await lerLinhas(f, body, formato, (r) => tp.adicionar(tp.linha(r)));
-    if (!lidas) throw new Error(`nenhum registro lido de "${a.nome}"`);
-    let parcial = tp.parcial();
-    podeReaproveitar && (mkdirSync(pastaCache, { recursive: !0 }), writeFileSync(join2(pastaCache, `${a.chave}.json`), JSON.stringify({ cfg, mesAndamento: tp.descartouMesEmAndamento ? mesAtual : null, parcial }))), global2.mesclar(parcial), estado.partes[a.chave] = { ...estado.partes[a.chave] || {}, hash, atualizadoEm: a.atualizadoEm, verificadoEm: now.toISOString() }, feitos++, salvar(), log(`${a.nome}: tratado (${lidas.toLocaleString("pt-BR")} linhas lidas) e guardado`);
-  }
-  let assinatura = sha256(Object.keys(hashes).sort().map((k) => `${k}:${hashes[k]}`).join("|") + "|" + cfg + (f.tratamento?.descartar_mes_em_andamento ? "|" + mesAtual : ""));
-  if (estado.hash === assinatura) return { mudou: !1, avisos, hash: assinatura, arquivosBrutos, baixados, reaproveitados };
-  let { registros, avisos: avisosTrat } = global2.finalizar();
-  if (!registros.length) throw new Error("nenhum registro restou depois do tratamento (confira o filtro e os nomes das colunas)");
-  return { mudou: !0, final: montarFinal(f, registros, urls, assinatura, now.toISOString()), avisos: [...avisosTrat, ...avisos], hash: assinatura, arquivosBrutos, baixados, reaproveitados };
-}
-function montarFinal(f, registros, urls, hash, coletadoEm) {
-  let amostra = registros.length > 5e3 ? registros.filter((_, i) => i % Math.ceil(registros.length / 5e3) === 0) : registros, analisado = analyzeDataset(f.nome, amostra.map((r) => ({ ...r })), "automacao"), forcar = { ...f.tratamento?.tipos || {} };
-  f.tratamento?.municipio?.codigo_ibge && (forcar[f.tratamento.municipio.codigo_ibge] = "category");
-  for (let c of analisado.columns) forcar[c.key] && (c.type = forcar[c.key]);
-  for (let [col, tipo] of Object.entries(forcar))
-    if (tipo === "category" || tipo === "string") for (let r of registros) r[col] !== null && r[col] !== void 0 && (r[col] = String(r[col]));
-  let dadosAte, ct = f.colunas_tempo;
-  return ct && (ct.ano || ct.data) && (dadosAte = filterKit.computeFilterModel(registros, {
-    year: ct.ano ? { enabled: !0, column: ct.ano } : void 0,
-    lastUpdate: { show: !0, monthColumn: ct.mes, dateColumn: ct.data }
-  }).lastData?.label), {
-    meta: {
-      fonte: f.nome,
-      credito: f.fonte_credito,
-      url_origem: urls.join(" "),
-      coletado_em: coletadoEm,
-      dados_ate: dadosAte,
-      linhas: registros.length,
-      hash_bruto: hash,
-      gerado_por: "DataDash Studio \xB7 automa\xE7\xE3o"
-    },
-    colunas: analisado.columns.map((c) => ({ chave: c.key, rotulo: c.label, tipo: c.type })),
-    registros
-  };
-}
-function gravarFinal(dir, pasta, final) {
-  let path = join2(dir, "final", `${pasta}.json`), texto = JSON.stringify(final, null, 1) + `
-`;
-  return existsSync2(path) && readFileSync2(path, "utf-8") === texto ? !1 : (mkdirSync(dirname(path), { recursive: !0 }), writeFileSync(path, texto), !0);
-}
+// automation/run.ts
+init_pipeline();
 
 // automation/alerts.ts
 var ROTULO = "automacao", marca = (chave) => `<!-- dd-alerta:${chave} -->`, ROTULOS_GRAVIDADE = { revisao: "aguardando-revisao", erro: "erro-na-coleta", atencao: "atencao" };
@@ -18192,9 +18347,9 @@ function resumoMarkdown(linhas, alertas, extra = []) {
 var rotulo = (f) => f.projeto ? `[${f.projeto}] ${f.nome}` : f.nome;
 async function executar(opts, deps) {
   let now = opts.agora || /* @__PURE__ */ new Date(), inicio = Date.now(), prazoMs = (opts.prazoMinutos ?? 45) * 6e4, gravarEstado = () => {
-    mkdirSync3(dirname3(estadoPath), { recursive: !0 }), writeFileSync3(estadoPath + ".tmp", JSON.stringify(estado, null, 2) + `
+    mkdirSync4(dirname4(estadoPath), { recursive: !0 }), writeFileSync4(estadoPath + ".tmp", JSON.stringify(estado, null, 2) + `
 `), renameSync(estadoPath + ".tmp", estadoPath);
-  }, docsApp = deps.firebase?.listarFontes ? await deps.firebase.listarFontes().catch((e) => (console.warn("N\xE3o foi poss\xEDvel ler as fontes do app:", e?.message || e), [])) : [], doApp = validarFontesDoApp(docsApp), config = loadConfigDir(opts.dados, doApp.fontes), estadoPath = join4(opts.dados, "estado", "fontes.json"), estado = existsSync4(estadoPath) ? JSON.parse(readFileSync4(estadoPath, "utf-8")) : {}, alertas = [];
+  }, docsApp = deps.firebase?.listarFontes ? await deps.firebase.listarFontes().catch((e) => (console.warn("N\xE3o foi poss\xEDvel ler as fontes do app:", e?.message || e), [])) : [], doApp = validarFontesDoApp(docsApp), config = loadConfigDir(opts.dados, doApp.fontes), estadoPath = join5(opts.dados, "estado", "fontes.json"), estado = existsSync5(estadoPath) ? JSON.parse(readFileSync5(estadoPath, "utf-8")) : {}, alertas = [];
   for (let e of doApp.erros)
     alertas.push({ chave: `config-app:${e.id}`, gravidade: "erro", titulo: `Fonte do app com configura\xE7\xE3o inv\xE1lida: ${e.nome}`, corpo: `A fonte "${e.nome}", cadastrada na tela Fontes autom\xE1ticas do app, n\xE3o p\xF4de ser usada.
 
@@ -18319,8 +18474,8 @@ Os pain\xE9is continuam com a vers\xE3o anterior. No app: Bases \u2192 "${atual.
       let { publicarProjetos: publicarProjetos2, carregarVendor: carregarVendor2 } = await Promise.resolve().then(() => (init_publish(), publish_exports));
       publicacao = await publicarProjetos2({
         source: deps.firebase.publishSource,
-        saida: join4(opts.dados, "site"),
-        estadoPath: join4(opts.dados, "estado", "publicacao.json"),
+        saida: join5(opts.dados, "site"),
+        estadoPath: join5(opts.dados, "estado", "publicacao.json"),
         vendor: carregarVendor2(deps.appDir),
         ids: config.publicacao?.projetos
       });
@@ -18332,7 +18487,7 @@ Os pain\xE9is continuam com a vers\xE3o anterior. No app: Bases \u2192 "${atual.
     for (let f of config.fontes.filter((x) => x.origem === "app")) {
       let st = estado[f.id] || {}, linha = linhas.find((l) => l.fonte === rotulo(f)), dadosAte, registros;
       try {
-        let fin = JSON.parse(readFileSync4(join4(opts.dados, "final", `${pastaFonte(f)}.json`), "utf-8"));
+        let fin = JSON.parse(readFileSync5(join5(opts.dados, "final", `${pastaFonte(f)}.json`), "utf-8"));
         dadosAte = fin.meta?.dados_ate, registros = fin.meta?.linhas;
       } catch {
       }
@@ -18352,8 +18507,17 @@ Os pain\xE9is continuam com a vers\xE3o anterior. No app: Bases \u2192 "${atual.
     for (let e of doApp.erros) situacoes.push([e.id, { atualizadaEm: now.toISOString(), ultimoErro: `configura\xE7\xE3o inv\xE1lida: ${e.mensagem}`, ultimoErroEm: now.toISOString(), resultado: "\u{1F534} configura\xE7\xE3o inv\xE1lida" }]);
     for (let [id, sit] of situacoes) await deps.firebase.gravarSituacao(id, sit).catch((e) => console.warn(`Situa\xE7\xE3o da fonte ${id} n\xE3o gravada:`, e?.message || e));
   }
+  let linhaExportacao = "";
+  if (deps.firebase?.exportacao)
+    try {
+      let ex = await exportarBasesDoApp(opts.dados, deps.firebase.exportacao, now);
+      linhaExportacao = resumoExportacao(ex), ex.erros.length && alertas.push({ chave: "exportacao-app", gravidade: "atencao", titulo: "Falha ao publicar bases do app no GitHub", corpo: ex.erros.map((e) => `- ${e}`).join(`
+`) });
+    } catch (e) {
+      linhaExportacao = `**Bases do app no GitHub:** erro: ${e?.message || e}`;
+    }
   gravarEstado();
-  let extra = publicacao ? [`**Publica\xE7\xE3o:** ${publicacao.projetos.map((p) => `${p.nome} (${p.paginas} p\xE1ginas${p.mudou ? ", atualizado" : ""})`).join("; ") || "nenhum projeto marcado"}${publicacao.mudou ? " \xB7 o site ser\xE1 republicado" : " \xB7 nada mudou no site"}`] : [], md = resumoMarkdown(linhas, alertas, extra), issues = null;
+  let extra = (linhaExportacao ? [linhaExportacao] : []).concat(publicacao ? [`**Publica\xE7\xE3o:** ${publicacao.projetos.map((p) => `${p.nome} (${p.paginas} p\xE1ginas${p.mudou ? ", atualizado" : ""})`).join("; ") || "nenhum projeto marcado"}${publicacao.mudou ? " \xB7 o site ser\xE1 republicado" : " \xB7 nada mudou no site"}`] : []), md = resumoMarkdown(linhas, alertas, extra), issues = null;
   if (deps.github)
     try {
       issues = await sincronizarIssues(alertas, { ...deps.github, agora: now });
@@ -18362,7 +18526,7 @@ Os pain\xE9is continuam com a vers\xE3o anterior. No app: Bases \u2192 "${atual.
     }
   return { linhas, alertas, publicacao, issues, resumo: md, siteMudou: !!publicacao?.mudou };
 }
-var VERSAO_AUTOMACAO = "2026-10-22.17 (anos fechados reaproveitados mesmo com data nova no portal)";
+var VERSAO_AUTOMACAO = "2026-10-22.24 (TCE-ES; n\xFAmeros brasileiros sem saber as colunas)";
 async function cli() {
   console.log(`DataDash \xB7 automa\xE7\xE3o vers\xE3o ${VERSAO_AUTOMACAO}`);
   let args = process.argv.slice(2), val = (k) => {
@@ -18370,7 +18534,7 @@ async function cli() {
     return i >= 0 ? args[i + 1] : void 0;
   }, has = (k) => args.includes(k);
   process.env.TZ = process.env.TZ || "America/Sao_Paulo";
-  let appDir = join4(dirname3(fileURLToPath(import.meta.url)), ".."), dados = val("--dados") || ".";
+  let appDir = join5(dirname4(fileURLToPath(import.meta.url)), ".."), dados = val("--dados") || ".";
   if (val("--fonte") === "conferir-catalogo") {
     let { conferirConjuntos: conferirConjuntos2, relatorioConferencia: relatorioConferencia2 } = await Promise.resolve().then(() => (init_conferir(), conferir_exports)), { conjuntosDoCatalogo: conjuntosDoCatalogo2 } = await Promise.resolve().then(() => (init_apiCatalog(), apiCatalog_exports)), itens = conjuntosDoCatalogo2();
     try {
@@ -18379,8 +18543,8 @@ async function cli() {
     }
     console.log(`Conferindo ${itens.length} conjuntos no portal\u2026`);
     let res = await conferirConjuntos2(itens, fetchPadrao), md = relatorioConferencia2(res, /* @__PURE__ */ new Date());
-    mkdirSync3(join4(dados, "estado"), { recursive: !0 }), writeFileSync3(join4(dados, "estado", "conferencia-catalogo.md"), md + `
-`), writeFileSync3(join4(dados, "estado", "conferencia-catalogo.json"), JSON.stringify(res, null, 1) + `
+    mkdirSync4(join5(dados, "estado"), { recursive: !0 }), writeFileSync4(join5(dados, "estado", "conferencia-catalogo.md"), md + `
+`), writeFileSync4(join5(dados, "estado", "conferencia-catalogo.json"), JSON.stringify(res, null, 1) + `
 `), console.log(md), process.env.GITHUB_STEP_SUMMARY && appendFileSync(process.env.GITHUB_STEP_SUMMARY, md + `
 `), process.env.GITHUB_OUTPUT && appendFileSync(process.env.GITHUB_OUTPUT, `site_mudou=false
 `);
@@ -18388,7 +18552,7 @@ async function cli() {
   }
   let firebase = null, comFirebase = !has("--sem-firebase") && !!process.env.GOOGLE_APPLICATION_CREDENTIALS;
   if (comFirebase || console.log("Modo simplificado: sem credenciais do Firebase. Coleta, hist\xF3rico, tratamento, JSON final e avisos funcionam; a atualiza\xE7\xE3o das bases \xE9 feita pelo app ao ler o JSON."), comFirebase) {
-    let { createAdminContext: createAdminContext2 } = await Promise.resolve().then(() => (init_serverSync(), serverSync_exports)), { adminPublishSource: adminPublishSource2 } = await Promise.resolve().then(() => (init_publish(), publish_exports)), cfg = JSON.parse(readFileSync4(join4(appDir, "firebase-applet-config.json"), "utf-8")), ctx = await createAdminContext2({ projectId: cfg.projectId, databaseId: cfg.firestoreDatabaseId }), loadDataset = async (id) => {
+    let { createAdminContext: createAdminContext2 } = await Promise.resolve().then(() => (init_serverSync(), serverSync_exports)), { adminPublishSource: adminPublishSource2 } = await Promise.resolve().then(() => (init_publish(), publish_exports)), cfg = JSON.parse(readFileSync5(join5(appDir, "firebase-applet-config.json"), "utf-8")), ctx = await createAdminContext2({ projectId: cfg.projectId, databaseId: cfg.firestoreDatabaseId }), loadDataset = async (id) => {
       let s = await ctx.db.collection("datasets").doc(id).get();
       return s.exists ? s.data() : null;
     };
@@ -18399,6 +18563,10 @@ async function cli() {
       listarFontes: async () => (await ctx.db.collection("fontesAutomaticas").get()).docs.map((d) => ({ id: d.id, ...d.data() })),
       gravarSituacao: async (id, situacao) => {
         await ctx.db.collection("fontesAutomaticas").doc(id).set({ situacao }, { merge: !0 });
+      },
+      exportacao: {
+        listarExportaveis: async () => (await ctx.db.collection("datasets").where("exportarGithub.ativo", "==", !0).get()).docs.map((d) => d.data()),
+        carregarRegistros: (ds) => ctx.store.loadRecords(ds)
       }
     };
   }
