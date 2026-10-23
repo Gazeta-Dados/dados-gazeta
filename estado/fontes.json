@@ -42,12 +42,88 @@
       "receitas-2026-csv": {
         "hash": "2733758977cadfd90fe46a139a1e6cb46bd74ecf8fc9a8b573784530cd307acd",
         "atualizadoEm": "2026-10-23T08:37:54.964134",
-        "verificadoEm": "2026-10-23T17:46:51.167Z"
+        "verificadoEm": "2026-10-23T22:30:55.226Z"
       }
     },
-    "ultimaVerificacao": "2026-10-23T17:46:51.167Z",
+    "ultimaVerificacao": "2026-10-23T22:30:55.226Z",
     "hash": "f59864ee8aeef594fa2b8ebce36d33caef30ad3b9f555fd76a22a8fd501cce52",
     "ultimaNovidade": "2026-10-23T17:46:51.167Z",
     "avisos": []
+  },
+  "tce-saude-municipios": {
+    "partes": {
+      "tce-saude-municipios": {
+        "brutoMes": "2026-10",
+        "hash": "da2cfdb2bd3723969f4c19c61176014a3283c47ff512155100427f0429eb8f2b",
+        "verificadoEm": "2026-10-23T22:30:55.226Z"
+      }
+    },
+    "ultimaVerificacao": "2026-10-23T22:30:55.226Z",
+    "hash": "113161b268121a93d03ad91948da248cd3ab005dc596833b1b90588ae1cdd8bf",
+    "ultimaNovidade": "2026-10-23T22:30:55.226Z",
+    "arquivo": "bruto/anuario/tce-saude-municipios/2026/2026-10-23_1930.csv.gz",
+    "avisos": []
+  },
+  "tce-educacao-municipios": {
+    "partes": {
+      "tce-educacao-municipios": {
+        "brutoMes": "2026-10",
+        "hash": "29eb184176e6abd597c5a69c695cfb4bb767e47a8db31f3d472ce9c81a5db38d",
+        "verificadoEm": "2026-10-23T22:30:55.226Z"
+      }
+    },
+    "ultimaVerificacao": "2026-10-23T22:30:55.226Z",
+    "hash": "9e1b6672ffe58499cbdffabff1653e067e8c4a7312102f2edf0d2682c2ca2b91",
+    "ultimaNovidade": "2026-10-23T22:30:55.226Z",
+    "arquivo": "bruto/anuario/tce-educacao-municipios/2026/2026-10-23_1930.csv.gz",
+    "avisos": []
+  },
+  "tce-pessoal-municipios": {
+    "partes": {
+      "tce-pessoal-municipios": {
+        "brutoMes": "2026-10",
+        "hash": "e601a4ca25b586b7a6388caef2600af65f0b0377a9b88af9decd25d01e3600d5",
+        "verificadoEm": "2026-10-23T22:30:55.226Z"
+      }
+    },
+    "ultimaVerificacao": "2026-10-23T22:30:55.226Z",
+    "hash": "145c47c2cc8a5a636eb339dcdd43bd18cd6c1f3f1a0889e02725a5bdfc14a97d",
+    "ultimaNovidade": "2026-10-23T22:30:55.226Z",
+    "arquivo": "bruto/anuario/tce-pessoal-municipios/2026/2026-10-23_1930.csv.gz",
+    "avisos": []
+  },
+  "tce-rcl-municipios": {
+    "partes": {
+      "tce-rcl-municipios": {
+        "brutoMes": "2026-10",
+        "hash": "572b9dde6d0397a8525715d7c5ae5662d1ca2ba4467d6a79fcb5acd7c70a5568",
+        "verificadoEm": "2026-10-23T22:30:55.226Z"
+      }
+    },
+    "ultimaVerificacao": "2026-10-23T22:30:55.226Z",
+    "hash": "72cc86cca1501ddce8032d0ee22e64332a534c23c246f702eff9ac5ebdbe7b02",
+    "ultimaNovidade": "2026-10-23T22:30:55.226Z",
+    "arquivo": "bruto/anuario/tce-rcl-municipios/2026/2026-10-23_1930.csv.gz",
+    "avisos": []
+  },
+  "tce-endividamento-municipios": {
+    "partes": {
+      "tce-endividamento-municipios": {
+        "brutoMes": "2026-10",
+        "hash": "6e6a54480bf98c5a2f4be144d5335a790f298841ad315e81c63fb2b1c43ea55b",
+        "verificadoEm": "2026-10-23T22:30:55.226Z"
+      }
+    },
+    "ultimaVerificacao": "2026-10-23T22:30:55.226Z",
+    "hash": "52ea099f9c5ddaffbbf40c7ddf7e77ecf3b3087693399acb8d9a14e0287ba4c4",
+    "ultimaNovidade": "2026-10-23T22:30:55.226Z",
+    "arquivo": "bruto/anuario/tce-endividamento-municipios/2026/2026-10-23_1930.csv.gz",
+    "avisos": []
+  },
+  "municipios-do-es-ibge": {
+    "partes": {},
+    "ultimaVerificacao": "2026-10-23T22:30:55.226Z",
+    "ultimoErro": "não foi possível conectar ao endereço (UND_ERR_CONNECT_TIMEOUT)",
+    "ultimoErroEm": "2026-10-23T22:30:55.226Z"
   }
 }
