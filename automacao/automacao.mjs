@@ -18046,13 +18046,17 @@ async function processarFonte(f, estado, dir, now, fetcher, municipios, opts = {
     }
   };
   for (let a of alvos) {
-    let prev = estado.partes[a.chave], anoArquivo = anoDe(a.nome) ?? anoDe(a.url || ""), fechado = anoArquivo !== null && anoArquivo < brt2.getUTCFullYear(), prazoConferencia = (a.atualizadoEm ? 30 : 90) * 864e5, conferidoHaPouco = !!prev?.verificadoEm && now.getTime() - new Date(prev.verificadoEm).getTime() < prazoConferencia, mesmaData = a.atualizadoEm ? prev?.atualizadoEm === a.atualizadoEm : !0;
-    if (fechado && conferidoHaPouco && mesmaData && prev?.hash) {
+    let prev = estado.partes[a.chave], anoArquivo = anoDe(a.nome) ?? anoDe(a.url || ""), fechado = anoArquivo !== null && anoArquivo < brt2.getUTCFullYear(), prazoConferencia = (a.atualizadoEm ? 30 : 90) * 864e5, conferidoHaPouco = !!prev?.verificadoEm && now.getTime() - new Date(prev.verificadoEm).getTime() < prazoConferencia;
+    if (fechado && conferidoHaPouco && prev?.hash) {
       let c = lerCache(a.chave);
       if (c) {
-        global2.mesclar(c), hashes[a.chave] = prev.hash, urls.push(a.url || a.local || ""), reaproveitados++, feitos++;
+        global2.mesclar(c), hashes[a.chave] = prev.hash, urls.push(a.url || a.local || ""), reaproveitados++, feitos++, a.atualizadoEm && prev.atualizadoEm && a.atualizadoEm !== prev.atualizadoEm && (estado.partes[a.chave] = { ...prev, atualizadoEm: a.atualizadoEm }), log(`${a.nome}: ano fechado reaproveitado (conferido em ${prev.verificadoEm.slice(0, 10)})`);
         continue;
       }
+    }
+    if (fechado && !a.local) {
+      let motivo = prev?.hash ? conferidoHaPouco ? "resultado guardado n\xE3o encontrado" : "confer\xEAncia peri\xF3dica do conte\xFAdo" : "ainda sem resultado guardado";
+      log(`${a.nome}: ano fechado, baixando (${motivo})`);
     }
     let restante = prazo - (Date.now() - inicio);
     if (!a.local && restante < MINIMO_PARA_COMECAR)
@@ -18358,7 +18362,7 @@ Os pain\xE9is continuam com a vers\xE3o anterior. No app: Bases \u2192 "${atual.
     }
   return { linhas, alertas, publicacao, issues, resumo: md, siteMudou: !!publicacao?.mudou };
 }
-var VERSAO_AUTOMACAO = "2026-10-22.16 (coleta em andamento continua na execu\xE7\xE3o seguinte)";
+var VERSAO_AUTOMACAO = "2026-10-22.17 (anos fechados reaproveitados mesmo com data nova no portal)";
 async function cli() {
   console.log(`DataDash \xB7 automa\xE7\xE3o vers\xE3o ${VERSAO_AUTOMACAO}`);
   let args = process.argv.slice(2), val = (k) => {
