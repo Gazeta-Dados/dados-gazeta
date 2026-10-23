@@ -2,7 +2,10 @@ name: Atualizar dados e publicar
 
 on:
   schedule:
-    - cron: '17 * * * *'   # de hora em hora (horário UTC); cada fonte segue a própria agenda (pasta fontes/)
+    # Uma vez por dia, às 06:17 de Brasília (09:17 UTC). Cada fonte segue a própria agenda (pasta fontes/);
+    # as tentativas diárias de "tentar_ate_novidade_dias" também cabem aqui.
+    # Para fontes que mudam ao longo do dia, volte para de hora em hora: '17 * * * *'
+    - cron: '17 9 * * *'
   workflow_dispatch:
     inputs:
       forcar:
