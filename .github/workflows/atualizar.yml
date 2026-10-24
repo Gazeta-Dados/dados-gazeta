@@ -13,7 +13,7 @@ on:
         type: boolean
         default: false
       fonte:
-        description: 'Somente esta fonte (o id dela, nos arquivos da pasta fontes/)'
+        description: 'Somente estas fontes: o id de uma fonte, vários ids separados por vírgula, ou o nome de um arquivo da pasta fontes/ (ex.: anuario.municipios)'
         required: false
       republicar:
         description: 'Republicar os sites mesmo sem mudança'
