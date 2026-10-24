@@ -1,0 +1,52 @@
+# ════════════════════════════════════════════════════════════════════════════
+# DESPESAS DO ESTADO DO ESPÍRITO SANTO — projeto "anuario"
+# Mesmo modelo das receitas: um CSV por ano no portal (perto de 1 GB cada), lido em
+# pedaços e SOMADO por categorias. O arquivo tem dados pessoais (CPF/CNPJ, nome do
+# favorecido, dados bancários): eles NÃO chegam ao repositório, porque só as colunas
+# da soma sobrevivem e os originais não são guardados (bruto: nunca).
+# ════════════════════════════════════════════════════════════════════════════
+
+fontes:
+  - id: despesas-es
+    nome: Despesas do Estado do Espírito Santo
+    ativo: true
+    ckan:
+      portal: https://dados.es.gov.br
+      conjunto: portal-da-transparencia-despesas-execucao-orcamentaria-e-financeira
+      recurso: despesas                # parte do nome dos arquivos (um por ano)
+      formato: csv
+      combinar: true                   # junta os anos numa série
+      ano_minimo: 2019
+    agenda:
+      frequencia: mensal
+      dia_do_mes: 15
+      hora: "06:00"
+      tentar_ate_novidade_dias: 10
+    max_dias_sem_novidade: 60
+    bruto: nunca                       # o original tem CPF/CNPJ e nomes: nunca vai para o repositório público
+    fonte_credito: Portal da Transparência do Governo do ES (dados.es.gov.br)
+    # dataset_id: "COLE_AQUI_O_ID_DA_BASE"
+    colunas_tempo: { ano: ano, mes: mes }
+    tratamento:
+      renomear:
+        Ano: ano
+        Data: data
+        ValorEmpenho: empenhado
+        ValorLiquidado: liquidado
+        ValorPago: pago
+        ValorRap: restos_a_pagar
+        CodigoOrgao: codigo_orgao
+        Orgao: orgao
+        Funcao: funcao
+        GrupoDespesa: grupo_despesa
+        CodigoElementoDespesa: codigo_elemento
+        ElementoDespesa: elemento_despesa
+      inteiros: [ano]
+      numeros: [empenhado, liquidado, pago, restos_a_pagar]
+      texto: [codigo_orgao, orgao, funcao, grupo_despesa, codigo_elemento, elemento_despesa]
+      data_para_ano_mes: { coluna: data, ano: ano, mes: mes }   # o arquivo não tem coluna de mês
+      descartar_mes_em_andamento: { ano: ano, mes: mes }
+      agrupar:
+        por: [ano, mes, codigo_orgao, orgao, funcao, grupo_despesa, codigo_elemento, elemento_despesa]
+        somar: [empenhado, liquidado, pago, restos_a_pagar]
+        contar: lancamentos
