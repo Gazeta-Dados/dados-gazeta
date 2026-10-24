@@ -55,10 +55,10 @@
       "tce-saude-municipios": {
         "brutoMes": "2026-10",
         "hash": "da2cfdb2bd3723969f4c19c61176014a3283c47ff512155100427f0429eb8f2b",
-        "verificadoEm": "2026-10-24T00:06:43.423Z"
+        "verificadoEm": "2026-10-24T17:33:38.830Z"
       }
     },
-    "ultimaVerificacao": "2026-10-24T00:06:43.423Z",
+    "ultimaVerificacao": "2026-10-24T17:33:38.830Z",
     "hash": "113161b268121a93d03ad91948da248cd3ab005dc596833b1b90588ae1cdd8bf",
     "ultimaNovidade": "2026-10-23T22:30:55.226Z",
     "arquivo": "bruto/anuario/tce-saude-municipios/2026/2026-10-23_1930.csv.gz",
@@ -69,10 +69,10 @@
       "tce-educacao-municipios": {
         "brutoMes": "2026-10",
         "hash": "29eb184176e6abd597c5a69c695cfb4bb767e47a8db31f3d472ce9c81a5db38d",
-        "verificadoEm": "2026-10-24T00:06:43.423Z"
+        "verificadoEm": "2026-10-24T17:33:38.830Z"
       }
     },
-    "ultimaVerificacao": "2026-10-24T00:06:43.423Z",
+    "ultimaVerificacao": "2026-10-24T17:33:38.830Z",
     "hash": "9e1b6672ffe58499cbdffabff1653e067e8c4a7312102f2edf0d2682c2ca2b91",
     "ultimaNovidade": "2026-10-23T22:30:55.226Z",
     "arquivo": "bruto/anuario/tce-educacao-municipios/2026/2026-10-23_1930.csv.gz",
@@ -83,10 +83,10 @@
       "tce-pessoal-municipios": {
         "brutoMes": "2026-10",
         "hash": "e601a4ca25b586b7a6388caef2600af65f0b0377a9b88af9decd25d01e3600d5",
-        "verificadoEm": "2026-10-24T00:06:43.423Z"
+        "verificadoEm": "2026-10-24T17:33:38.830Z"
       }
     },
-    "ultimaVerificacao": "2026-10-24T00:06:43.423Z",
+    "ultimaVerificacao": "2026-10-24T17:33:38.830Z",
     "hash": "145c47c2cc8a5a636eb339dcdd43bd18cd6c1f3f1a0889e02725a5bdfc14a97d",
     "ultimaNovidade": "2026-10-23T22:30:55.226Z",
     "arquivo": "bruto/anuario/tce-pessoal-municipios/2026/2026-10-23_1930.csv.gz",
@@ -97,10 +97,10 @@
       "tce-rcl-municipios": {
         "brutoMes": "2026-10",
         "hash": "572b9dde6d0397a8525715d7c5ae5662d1ca2ba4467d6a79fcb5acd7c70a5568",
-        "verificadoEm": "2026-10-24T00:06:43.423Z"
+        "verificadoEm": "2026-10-24T17:33:38.830Z"
       }
     },
-    "ultimaVerificacao": "2026-10-24T00:06:43.423Z",
+    "ultimaVerificacao": "2026-10-24T17:33:38.830Z",
     "hash": "72cc86cca1501ddce8032d0ee22e64332a534c23c246f702eff9ac5ebdbe7b02",
     "ultimaNovidade": "2026-10-23T22:30:55.226Z",
     "arquivo": "bruto/anuario/tce-rcl-municipios/2026/2026-10-23_1930.csv.gz",
@@ -111,10 +111,10 @@
       "tce-endividamento-municipios": {
         "brutoMes": "2026-10",
         "hash": "6e6a54480bf98c5a2f4be144d5335a790f298841ad315e81c63fb2b1c43ea55b",
-        "verificadoEm": "2026-10-24T00:06:43.423Z"
+        "verificadoEm": "2026-10-24T17:33:38.830Z"
       }
     },
-    "ultimaVerificacao": "2026-10-24T00:06:43.423Z",
+    "ultimaVerificacao": "2026-10-24T17:33:38.830Z",
     "hash": "52ea099f9c5ddaffbbf40c7ddf7e77ecf3b3087693399acb8d9a14e0287ba4c4",
     "ultimaNovidade": "2026-10-23T22:30:55.226Z",
     "arquivo": "bruto/anuario/tce-endividamento-municipios/2026/2026-10-23_1930.csv.gz",
@@ -166,10 +166,10 @@
       "municipios-receitas-2026-zip": {
         "hash": "16c05ed0deadc41d629114e85b6b7d5068ee0915aee7da9a9f59b422240a23bb",
         "atualizadoEm": "2026-10-08T09:44:17.893616",
-        "verificadoEm": "2026-10-24T00:06:43.423Z"
+        "verificadoEm": "2026-10-24T17:33:38.830Z"
       }
     },
-    "ultimaVerificacao": "2026-10-24T00:06:43.423Z",
+    "ultimaVerificacao": "2026-10-24T17:33:38.830Z",
     "hash": "1f53eac85fbfbd8ecbb60231ea0045532533ec6279734fb6c58c752e60b614d2",
     "ultimaNovidade": "2026-10-23T23:08:13.317Z",
     "avisos": []
@@ -214,10 +214,10 @@
       "municipios-despesas-2026-zip": {
         "hash": "015c04ac1bf95ac15b65cedfefa494773fc80297b73ce09c97d1f2769510afb2",
         "atualizadoEm": "2026-10-08T09:42:03.320759",
-        "verificadoEm": "2026-10-24T00:06:43.423Z"
+        "verificadoEm": "2026-10-24T17:33:38.830Z"
       }
     },
-    "ultimaVerificacao": "2026-10-24T00:06:43.423Z",
+    "ultimaVerificacao": "2026-10-24T17:33:38.830Z",
     "hash": "9d664297b76191d8d6c773a37a0ff04f5add84210a6f506030b59a02b74cf257",
     "ultimaNovidade": "2026-10-24T00:06:43.423Z",
     "avisos": []
@@ -226,17 +226,17 @@
     "partes": {
       "despesas-2019-csv": {
         "hash": "5791666e694d0f4ce5445cf254408cb2479fb41c9e81ce9d02874303315bf01a",
-        "atualizadoEm": "2026-10-17T18:50:49.661758",
+        "atualizadoEm": "2026-10-24T15:45:40.949675",
         "verificadoEm": "2026-10-24T00:06:43.423Z"
       },
       "despesas-2020-csv": {
         "hash": "d8db166729761b76097b43ea816b2ce34ffbb785c2e19a04bd8b76c48971960c",
-        "atualizadoEm": "2026-10-17T19:25:27.033867",
+        "atualizadoEm": "2026-10-24T16:15:34.599785",
         "verificadoEm": "2026-10-24T00:06:43.423Z"
       },
       "despesas-2021-csv": {
         "hash": "4f81a58202eb77947df7882ed2dd84cf2b826edaad2362cd5678168ca975e408",
-        "atualizadoEm": "2026-10-17T20:16:30.846108",
+        "atualizadoEm": "2026-10-24T17:04:10.845157",
         "verificadoEm": "2026-10-24T00:06:43.423Z"
       },
       "despesas-2022-csv": {
@@ -272,10 +272,10 @@
       "despesas-2026-csv": {
         "hash": "3c8d362ddaae5e41509c01c6718b97f56f57212f771f4746709d53fcb2daade2",
         "atualizadoEm": "2026-10-23T12:36:35.191601",
-        "verificadoEm": "2026-10-24T09:48:42.871Z"
+        "verificadoEm": "2026-10-24T17:33:38.830Z"
       }
     },
-    "ultimaVerificacao": "2026-10-24T09:48:42.871Z",
+    "ultimaVerificacao": "2026-10-24T17:33:38.830Z",
     "hash": "7f68a7ad51a87b5477bee525716699c8d0d2b91c63cec346ce2c904c6395aa55",
     "ultimaNovidade": "2026-10-24T09:48:42.871Z",
     "avisos": []
