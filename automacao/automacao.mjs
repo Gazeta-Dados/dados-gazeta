@@ -5528,7 +5528,7 @@ function loadConfigDir(dir, doApp = []) {
       if (!lista.length) continue;
       let cfg = validateConfig({ fontes: lista });
       for (let f of cfg.fontes)
-        p.projeto && (f.projeto = p.projeto), f.projeto && !PROJETO_RE.test(f.projeto) && erros.push(`${p.arquivo} (${f.id}): "projeto" s\xF3 com letras min\xFAsculas, n\xFAmeros e h\xEDfens.`), f.arquivo && f.projeto && !f.arquivo.startsWith(`entrada/${f.projeto}/`) && erros.push(`${p.arquivo} (${f.id}): a planilha deve ficar em entrada/${f.projeto}/ (est\xE1 em ${f.arquivo}).`), arquivoDe.set(f, p.arquivo), fontes.push(f);
+        p.projeto && (f.projeto = p.projeto), f.projeto && !PROJETO_RE.test(f.projeto) && erros.push(`${p.arquivo} (${f.id}): "projeto" s\xF3 com letras min\xFAsculas, n\xFAmeros e h\xEDfens.`), f.arquivo && f.projeto && !f.arquivo.startsWith(`entrada/${f.projeto}/`) && erros.push(`${p.arquivo} (${f.id}): a planilha deve ficar em entrada/${f.projeto}/ (est\xE1 em ${f.arquivo}).`), arquivoDe.set(f, p.arquivo), f.arquivoConfig = p.arquivo, fontes.push(f);
     } catch (e) {
       erros.push(...String(e.message).replace(`Configura\xE7\xE3o inv\xE1lida:
 - `, "").split(`
@@ -5571,6 +5571,11 @@ function validarFontesDoApp(docs) {
 }
 function pastaFonte(f) {
   return f.projeto ? `${f.projeto}/${f.id}` : f.id;
+}
+function fonteEscolhida(f, filtro) {
+  if (!filtro || !filtro.trim()) return !0;
+  let arquivo = (f.arquivoConfig || "").replace(/^fontes\//, "").replace(/\.ya?ml$/i, "");
+  return filtro.split(",").map((x) => x.trim()).filter(Boolean).some((t) => t === f.id || arquivo && t === arquivo || !!f.projeto && t === f.projeto);
 }
 var import_yaml, ID_RE, PROJETO_RE, init_config = __esm({
   "automation/config.ts"() {
@@ -18575,6 +18580,326 @@ var require_undici = __commonJS({
   }
 });
 
+// src/lib/municipiosES.ts
+var MUNICIPIOS_ES, PORCODIGO, nomeDoMunicipioES, CODIGOS_MUNICIPIOS_ES, init_municipiosES = __esm({
+  "src/lib/municipiosES.ts"() {
+    MUNICIPIOS_ES = [
+      {
+        codigo: "3200102",
+        nome: "Afonso Cl\xE1udio"
+      },
+      {
+        codigo: "3200136",
+        nome: "\xC1guia Branca"
+      },
+      {
+        codigo: "3200169",
+        nome: "\xC1gua Doce do Norte"
+      },
+      {
+        codigo: "3200201",
+        nome: "Alegre"
+      },
+      {
+        codigo: "3200300",
+        nome: "Alfredo Chaves"
+      },
+      {
+        codigo: "3200359",
+        nome: "Alto Rio Novo"
+      },
+      {
+        codigo: "3200409",
+        nome: "Anchieta"
+      },
+      {
+        codigo: "3200508",
+        nome: "Apiac\xE1"
+      },
+      {
+        codigo: "3200607",
+        nome: "Aracruz"
+      },
+      {
+        codigo: "3200706",
+        nome: "At\xEDlio Viv\xE1cqua"
+      },
+      {
+        codigo: "3200805",
+        nome: "Baixo Guandu"
+      },
+      {
+        codigo: "3200904",
+        nome: "Barra de S\xE3o Francisco"
+      },
+      {
+        codigo: "3201001",
+        nome: "Boa Esperan\xE7a"
+      },
+      {
+        codigo: "3201100",
+        nome: "Bom Jesus do Norte"
+      },
+      {
+        codigo: "3201159",
+        nome: "Brejetuba"
+      },
+      {
+        codigo: "3201209",
+        nome: "Cachoeiro de Itapemirim"
+      },
+      {
+        codigo: "3201308",
+        nome: "Cariacica"
+      },
+      {
+        codigo: "3201407",
+        nome: "Castelo"
+      },
+      {
+        codigo: "3201506",
+        nome: "Colatina"
+      },
+      {
+        codigo: "3201605",
+        nome: "Concei\xE7\xE3o da Barra"
+      },
+      {
+        codigo: "3201704",
+        nome: "Concei\xE7\xE3o do Castelo"
+      },
+      {
+        codigo: "3201803",
+        nome: "Divino de S\xE3o Louren\xE7o"
+      },
+      {
+        codigo: "3201902",
+        nome: "Domingos Martins"
+      },
+      {
+        codigo: "3202009",
+        nome: "Dores do Rio Preto"
+      },
+      {
+        codigo: "3202108",
+        nome: "Ecoporanga"
+      },
+      {
+        codigo: "3202207",
+        nome: "Fund\xE3o"
+      },
+      {
+        codigo: "3202256",
+        nome: "Governador Lindenberg"
+      },
+      {
+        codigo: "3202306",
+        nome: "Gua\xE7u\xED"
+      },
+      {
+        codigo: "3202405",
+        nome: "Guarapari"
+      },
+      {
+        codigo: "3202454",
+        nome: "Ibatiba"
+      },
+      {
+        codigo: "3202504",
+        nome: "Ibira\xE7u"
+      },
+      {
+        codigo: "3202553",
+        nome: "Ibitirama"
+      },
+      {
+        codigo: "3202603",
+        nome: "Iconha"
+      },
+      {
+        codigo: "3202652",
+        nome: "Irupi"
+      },
+      {
+        codigo: "3202702",
+        nome: "Itagua\xE7u"
+      },
+      {
+        codigo: "3202801",
+        nome: "Itapemirim"
+      },
+      {
+        codigo: "3202900",
+        nome: "Itarana"
+      },
+      {
+        codigo: "3203007",
+        nome: "I\xFAna"
+      },
+      {
+        codigo: "3203056",
+        nome: "Jaguar\xE9"
+      },
+      {
+        codigo: "3203106",
+        nome: "Jer\xF4nimo Monteiro"
+      },
+      {
+        codigo: "3203130",
+        nome: "Jo\xE3o Neiva"
+      },
+      {
+        codigo: "3203163",
+        nome: "Laranja da Terra"
+      },
+      {
+        codigo: "3203205",
+        nome: "Linhares"
+      },
+      {
+        codigo: "3203304",
+        nome: "Manten\xF3polis"
+      },
+      {
+        codigo: "3203320",
+        nome: "Marata\xEDzes"
+      },
+      {
+        codigo: "3203346",
+        nome: "Marechal Floriano"
+      },
+      {
+        codigo: "3203353",
+        nome: "Maril\xE2ndia"
+      },
+      {
+        codigo: "3203403",
+        nome: "Mimoso do Sul"
+      },
+      {
+        codigo: "3203502",
+        nome: "Montanha"
+      },
+      {
+        codigo: "3203601",
+        nome: "Mucurici"
+      },
+      {
+        codigo: "3203700",
+        nome: "Muniz Freire"
+      },
+      {
+        codigo: "3203809",
+        nome: "Muqui"
+      },
+      {
+        codigo: "3203908",
+        nome: "Nova Ven\xE9cia"
+      },
+      {
+        codigo: "3204005",
+        nome: "Pancas"
+      },
+      {
+        codigo: "3204054",
+        nome: "Pedro Can\xE1rio"
+      },
+      {
+        codigo: "3204104",
+        nome: "Pinheiros"
+      },
+      {
+        codigo: "3204203",
+        nome: "Pi\xFAma"
+      },
+      {
+        codigo: "3204252",
+        nome: "Ponto Belo"
+      },
+      {
+        codigo: "3204302",
+        nome: "Presidente Kennedy"
+      },
+      {
+        codigo: "3204351",
+        nome: "Rio Bananal"
+      },
+      {
+        codigo: "3204401",
+        nome: "Rio Novo do Sul"
+      },
+      {
+        codigo: "3204500",
+        nome: "Santa Leopoldina"
+      },
+      {
+        codigo: "3204559",
+        nome: "Santa Maria de Jetib\xE1"
+      },
+      {
+        codigo: "3204609",
+        nome: "Santa Teresa"
+      },
+      {
+        codigo: "3204658",
+        nome: "S\xE3o Domingos do Norte"
+      },
+      {
+        codigo: "3204708",
+        nome: "S\xE3o Gabriel da Palha"
+      },
+      {
+        codigo: "3204807",
+        nome: "S\xE3o Jos\xE9 do Cal\xE7ado"
+      },
+      {
+        codigo: "3204906",
+        nome: "S\xE3o Mateus"
+      },
+      {
+        codigo: "3204955",
+        nome: "S\xE3o Roque do Cana\xE3"
+      },
+      {
+        codigo: "3205002",
+        nome: "Serra"
+      },
+      {
+        codigo: "3205010",
+        nome: "Sooretama"
+      },
+      {
+        codigo: "3205036",
+        nome: "Vargem Alta"
+      },
+      {
+        codigo: "3205069",
+        nome: "Venda Nova do Imigrante"
+      },
+      {
+        codigo: "3205101",
+        nome: "Viana"
+      },
+      {
+        codigo: "3205150",
+        nome: "Vila Pav\xE3o"
+      },
+      {
+        codigo: "3205176",
+        nome: "Vila Val\xE9rio"
+      },
+      {
+        codigo: "3205200",
+        nome: "Vila Velha"
+      },
+      {
+        codigo: "3205309",
+        nome: "Vit\xF3ria"
+      }
+    ], PORCODIGO = new Map(MUNICIPIOS_ES.map((m) => [m.codigo, m.nome])), nomeDoMunicipioES = (codigo) => codigo == null ? void 0 : PORCODIGO.get(String(codigo)), CODIGOS_MUNICIPIOS_ES = MUNICIPIOS_ES.map((m) => m.codigo).join("|");
+  }
+});
+
 // node_modules/process-nextick-args/index.js
 var require_process_nextick_args = __commonJS({
   "node_modules/process-nextick-args/index.js"(exports, module) {
@@ -24267,6 +24592,7 @@ function achatarIbgePesquisas(d) {
           indicador_id: id,
           indicador: INDICADORES_CONHECIDOS[id] || `Indicador ${id}`,
           cod_ibge: String(r.localidade ?? ""),
+          ...nomeDoMunicipioES(r.localidade) ? { municipio: nomeDoMunicipioES(r.localidade) } : {},
           periodo: p,
           .../^\d{4}$/.test(p) ? { ano: Number(p) } : {},
           valor: v,
@@ -24278,6 +24604,7 @@ function achatarIbgePesquisas(d) {
 }
 var ehObjetoSimples, INDICADORES_CONHECIDOS, init_ibgeFormatos = __esm({
   "src/lib/ibgeFormatos.ts"() {
+    init_municipiosES();
     ehObjetoSimples = (v) => v !== null && typeof v == "object" && !Array.isArray(v) && !(v instanceof Date);
     INDICADORES_CONHECIDOS = {
       30255: "IDEB \u2013 Anos iniciais do ensino fundamental (rede p\xFAblica)",
@@ -25011,19 +25338,10 @@ async function baixarParte(f, nome, url, fetcher, totalMs) {
 async function carregarMunicipios(dir, fetcher) {
   let path = join3(dir, "referencias", "municipios-es.json");
   if (existsSync3(path)) {
-    let bruta = JSON.parse(readFileSync3(path, "utf-8")), lista2 = (Array.isArray(bruta) ? bruta : []).map((m) => ({ codigo: String(m.codigo ?? m.id ?? ""), nome: String(m.nome ?? "") })).filter((m) => m.nome);
-    if (lista2.length >= 70) return lista2;
+    let bruta = JSON.parse(readFileSync3(path, "utf-8")), lista = (Array.isArray(bruta) ? bruta : []).map((m) => ({ codigo: String(m.codigo ?? m.id ?? ""), nome: String(m.nome ?? "") })).filter((m) => m.nome);
+    if (lista.length >= 70) return lista;
   }
-  let res;
-  try {
-    res = await fetcher("https://servicodados.ibge.gov.br/api/v1/localidades/estados/32/municipios");
-  } catch (e) {
-    throw new Error(`n\xE3o foi poss\xEDvel baixar a lista de munic\xEDpios do IBGE (${e?.message || e}). Alternativa: abra https://servicodados.ibge.gov.br/api/v1/localidades/estados/32/municipios no navegador, salve como municipios-es.json e envie para a pasta referencias/ do reposit\xF3rio.`);
-  }
-  if (res.status >= 400) throw new Error(`IBGE respondeu HTTP ${res.status}`);
-  let lista = JSON.parse(res.body.toString("utf-8")).map((m) => ({ codigo: String(m.id), nome: m.nome }));
-  if (lista.length < 70) throw new Error(`lista do IBGE incompleta (${lista.length} munic\xEDpios)`);
-  return mkdirSync2(dirname2(path), { recursive: !0 }), writeFileSync2(path, JSON.stringify(lista, null, 2)), lista;
+  return MUNICIPIOS_ES.map((m) => ({ codigo: m.codigo, nome: m.nome }));
 }
 function decodificar2(body) {
   let txt = body.toString(codificacao(body) === "utf-8" ? "utf-8" : "latin1");
@@ -25049,6 +25367,60 @@ function* pedacosDeTexto(body) {
   let resto = dec.decode();
   resto && (yield resto);
 }
+async function* textoDeFluxo(fluxo) {
+  let inicio = [], tam = 0, dec = null, primeiro = !0, emitir = (b, fim) => {
+    let t = dec.decode(b, { stream: !fim });
+    return primeiro && (t.charCodeAt(0) === 65279 && (t = t.slice(1)), primeiro = !1), t;
+  };
+  for await (let pedaco of fluxo) {
+    let b = Buffer.isBuffer(pedaco) ? pedaco : Buffer.from(pedaco);
+    if (!dec) {
+      if (inicio.push(b), tam += b.length, tam < 2 * 1048576) continue;
+      let juntos = Buffer.concat(inicio);
+      inicio.length = 0, dec = new TextDecoder(codificacao(juntos));
+      let t2 = emitir(juntos, !1);
+      t2 && (yield t2);
+      continue;
+    }
+    let t = emitir(b, !1);
+    t && (yield t);
+  }
+  if (!dec) {
+    let juntos = Buffer.concat(inicio);
+    dec = new TextDecoder(codificacao(juntos));
+    let t = emitir(juntos, !1);
+    t && (yield t);
+  }
+  let resto = dec.decode();
+  resto && (yield resto);
+}
+async function lerCsvDePedacos(f, pedacos, aoLer) {
+  let texto = colunasDeTexto(f), n = 0;
+  return await new Promise((resolve, reject) => {
+    let falhou = !1;
+    import_papaparse2.default.parse(Readable.from(pedacos), {
+      header: !0,
+      skipEmptyLines: "greedy",
+      dynamicTyping: f.tratamento?.numeros_br_automaticos ? !1 : (campo) => !texto.has(String(campo)),
+      delimitersToGuess: [";", "	", ",", "|"],
+      transformHeader: (h) => h.trim(),
+      step: (res, parser) => {
+        if (!falhou)
+          try {
+            n++, aoLer(res.data);
+          } catch (e) {
+            falhou = !0, parser.abort(), reject(e);
+          }
+      },
+      complete: () => {
+        falhou || resolve();
+      },
+      error: (e) => {
+        falhou || (falhou = !0, reject(e));
+      }
+    });
+  }), n;
+}
 function colunasDeTexto(f) {
   let t = f.tratamento || {}, inverso = {};
   for (let [orig, novo] of Object.entries(t.renomear || {})) inverso[String(novo)] = orig;
@@ -25064,40 +25436,14 @@ function colunasDeTexto(f) {
 }
 async function lerLinhas(f, body, formato, aoLer) {
   let n = 0;
-  if (formato === "csv") {
-    let texto = colunasDeTexto(f);
-    return await new Promise((resolve, reject) => {
-      let falhou = !1;
-      import_papaparse2.default.parse(Readable.from(pedacosDeTexto(body)), {
-        header: !0,
-        skipEmptyLines: "greedy",
-        // Com numeros_br_automaticos, nada é convertido aqui: o tratamento converte com cuidado (zeros à esquerda preservados)
-        dynamicTyping: f.tratamento?.numeros_br_automaticos ? !1 : (campo) => !texto.has(String(campo)),
-        delimitersToGuess: [";", "	", ",", "|"],
-        transformHeader: (h) => h.trim(),
-        step: (res, parser) => {
-          if (!falhou)
-            try {
-              n++, aoLer(res.data);
-            } catch (e) {
-              falhou = !0, parser.abort(), reject(e);
-            }
-        },
-        complete: () => {
-          falhou || resolve();
-        },
-        error: (e) => {
-          falhou || (falhou = !0, reject(e));
-        }
-      });
-    }), n;
-  }
+  if (formato === "csv") return lerCsvDePedacos(f, pedacosDeTexto(body), aoLer);
   if (formato === "zip") {
     let zip = await (await Promise.resolve().then(() => __toESM(require_lib3(), 1))).default.loadAsync(body), textos2 = Object.values(zip.files).filter((e) => !e.dir && /\.(csv|txt|tsv)$/i.test(e.name) && !/(^|\/)(__MACOSX|\.)/.test(e.name)), alvo = f.arquivo_no_zip ? normalizarNome(f.arquivo_no_zip) : "", escolhidos = (alvo ? textos2.filter((e) => normalizarNome(e.name).includes(alvo)) : textos2).sort((a, b) => a.name.localeCompare(b.name));
     if (escolhidos.length) {
       for (let e of escolhidos) {
-        let buf = await e.async("nodebuffer");
-        n += await lerLinhas(f, buf, "csv", aoLer);
+        let fluxo = new Readable({ read() {
+        } }).wrap(e.nodeStream("nodebuffer"));
+        n += await lerCsvDePedacos(f, textoDeFluxo(fluxo), aoLer);
       }
       return n;
     }
@@ -25240,6 +25586,7 @@ function gravarFinal(dir, pasta, final) {
 var import_papaparse2, import_undici, conexoesConfiguradas, MAX_BYTES, MAX_BRUTO_NO_REPO, fetchPadrao, anoDe, slug, init_pipeline = __esm({
   "automation/pipeline.ts"() {
     import_papaparse2 = __toESM(require_papaparse(), 1), import_undici = __toESM(require_undici(), 1);
+    init_municipiosES();
     init_config();
     init_xlsx();
     init_tratador();
@@ -28355,6 +28702,7 @@ function conjuntosDoCatalogo() {
 }
 var CATALOGO_ORIGINAL, NAO_VERIFICADO, SERIE_BCB, REVISAO, ORIGEM_LISTA, LINK_SEGURANCA, SENSIVEL_SEGURANCA, VITIMAS, ORIGEM_TEMPO_REAL, ORIGEM_COMEX, CERT_COMEX, AGENDA_COMEX, SINAL_COMEX, ORIGEM_EDU, ORIGEM_IBGE, AGREGADOS, LINK_CONFERIDO, ckanES, LINK_CONFERIDO_AREA, portalES, CATALOGO_ACRESCIMOS, PUBLIC_API_CATALOG, init_apiCatalog = __esm({
   "src/lib/apiCatalog.ts"() {
+    init_municipiosES();
     CATALOGO_ORIGINAL = [
       // ==========================================
       // GOVERNO DO ESTADO DO ESPÍRITO SANTO (SEFAZ / SEP / TRANSPARÊNCIA ES)
@@ -29560,7 +29908,7 @@ var CATALOGO_ORIGINAL, NAO_VERIFICADO, SERIE_BCB, REVISAO, ORIGEM_LISTA, LINK_SE
         category: "Educa\xE7\xE3o",
         sphere: "federal",
         source: "INEP, via API de Pesquisas do IBGE (IBGE Cidades@)",
-        url: "https://servicodados.ibge.gov.br/api/v1/pesquisas/indicadores/30255|30256/resultados/{{MUNICIPIOS_ES}}",
+        url: `https://servicodados.ibge.gov.br/api/v1/pesquisas/indicadores/30255|30256/resultados/${CODIGOS_MUNICIPIOS_ES}`,
         pagina: "https://servicodados.ibge.gov.br/api/docs/pesquisas",
         format: "JSON",
         description: "S\xE9rie hist\xF3rica do IDEB (anos iniciais e anos finais do ensino fundamental, rede p\xFAblica) dos 78 munic\xEDpios capixabas.",
@@ -29570,8 +29918,7 @@ var CATALOGO_ORIGINAL, NAO_VERIFICADO, SERIE_BCB, REVISAO, ORIGEM_LISTA, LINK_SE
         recommendedScheduleDesc: "Anual (o IDEB sai a cada dois anos)",
         suggestedName: "IDEB dos munic\xEDpios",
         tags: ["ideb", "educa\xE7\xE3o", "inep", "munic\xEDpios", "ensino fundamental"],
-        importavelNoApp: !1,
-        avisos: [ORIGEM_EDU, "Indicadores 30255 (anos iniciais) e 30256 (anos finais), conforme a lista. {{MUNICIPIOS_ES}} \xE9 trocado pela automa\xE7\xE3o pelos c\xF3digos dos 78 munic\xEDpios; por isso, use como fonte autom\xE1tica (a importa\xE7\xE3o direta no app n\xE3o monta esse endere\xE7o).", "A resposta traz s\xF3 o c\xF3digo do munic\xEDpio: a automa\xE7\xE3o acrescenta o nome oficial pela lista do IBGE."]
+        avisos: [ORIGEM_EDU, "Indicadores 30255 (anos iniciais) e 30256 (anos finais), conforme a lista. O endere\xE7o j\xE1 traz os c\xF3digos dos 78 munic\xEDpios.", "O IBGE recusa conex\xF5es do rob\xF4 do GitHub (que roda fora do Brasil): importe no app, que busca pelo seu navegador. A resposta traz s\xF3 o c\xF3digo do munic\xEDpio; o app acrescenta o nome oficial."]
       },
       {
         id: "fed_pnad_analfabetismo_es",
@@ -30711,11 +31058,38 @@ Corrija no app; as outras fontes continuam funcionando.` });
       alertas.push({ chave: "referencia:municipios", gravidade: "atencao", titulo: "Lista de munic\xEDpios do IBGE indispon\xEDvel", corpo: `N\xE3o foi poss\xEDvel obter a lista oficial de munic\xEDpios do ES (${e.message}). Os nomes n\xE3o foram padronizados nesta execu\xE7\xE3o.` });
     }
   for (let f of config.fontes) {
-    if (f.ativo === !1 || opts.fonte && f.id !== opts.fonte) continue;
+    if (f.ativo === !1 || !fonteEscolhida(f, opts.fonte)) continue;
     let st = estado[f.id] || {}, motivo = fonteDevida(f, st, now, opts.forcar);
     if (!motivo) {
       let parada = fonteParada(f, st, now);
       parada && alertas.push({ projeto: f.projeto, chave: `parada:${f.id}`, gravidade: "atencao", titulo: `Fonte sem dado novo: ${f.nome}`, corpo: parada });
+      continue;
+    }
+    if (deps.isolar) {
+      estado[f.id] = st, gravarEstado(), console.log(`\u2192 ${rotulo(f)}: coletando em processo separado`);
+      let r = await deps.isolar(f, { forcar: !!opts.forcar, agora: now.toISOString(), prazoMs: Math.max(6e4, prazoMs - (Date.now() - inicio)) });
+      try {
+        let lido = JSON.parse(readFileSync5(estadoPath, "utf-8"));
+        lido[f.id] && (estado[f.id] = lido[f.id]);
+      } catch {
+      }
+      if (r.resultado) {
+        linhas.push(...r.resultado.linhas), alertas.push(...r.resultado.alertas);
+        for (let id of r.resultado.novos) {
+          let pessoal = r.resultado.finaisPessoais?.[id];
+          if (pessoal) {
+            novosFinais.set(id, pessoal);
+            continue;
+          }
+          try {
+            novosFinais.set(id, JSON.parse(readFileSync5(join5(opts.dados, "final", `${pastaFonte(f)}.json`), "utf-8")));
+          } catch {
+          }
+        }
+      } else {
+        let st2 = estado[f.id] || {};
+        st2.ultimaVerificacao = now.toISOString(), st2.ultimoErro = `a coleta desta fonte parou de forma inesperada (c\xF3digo ${r.codigo})${r.codigo === 134 ? ": falta de mem\xF3ria" : ""}; as outras fontes seguiram normalmente`, st2.ultimoErroEm = now.toISOString(), estado[f.id] = st2, linhas.push({ fonte: rotulo(f), resultado: "\u{1F534} erro", detalhe: st2.ultimoErro });
+      }
       continue;
     }
     let sinal;
@@ -30752,6 +31126,16 @@ Corrija no app; as outras fontes continuam funcionando.` });
       st.ultimaVerificacao = now.toISOString(), st.ultimoErro = String(e?.message || e), st.ultimoErroEm = now.toISOString(), linhas.push({ fonte: rotulo(f), resultado: "\u{1F534} erro", detalhe: st.ultimoErro });
     }
     estado[f.id] = st;
+  }
+  if (opts.somenteColeta) {
+    gravarEstado();
+    let resultado = {
+      linhas,
+      alertas: alertas.filter((a) => a.chave.startsWith("parada:")),
+      novos: [...novosFinais.keys()],
+      finaisPessoais: Object.fromEntries([...novosFinais].filter(([id]) => config.fontes.find((x) => x.id === id)?.dados_pessoais))
+    };
+    return opts.resultadoEm && writeFileSync4(opts.resultadoEm, JSON.stringify(resultado)), { linhas, alertas, publicacao: null, issues: null, resumo: "", siteMudou: !1 };
   }
   for (let f of config.fontes) {
     let st = estado[f.id];
@@ -30873,8 +31257,25 @@ Os pain\xE9is continuam com a vers\xE3o anterior. No app: Bases \u2192 "${atual.
     }
   return { linhas, alertas, publicacao, issues, resumo: md, siteMudou: !!publicacao?.mudou };
 }
-var VERSAO_AUTOMACAO = "2026-10-22.28 (finan\xE7as municipais; munic\xEDpio pela esfera administrativa)";
+var VERSAO_AUTOMACAO = "2026-10-22.31 (lista oficial dos 78 munic\xEDpios embutida)";
+async function garantirMemoria() {
+  if (process.env.DD_REINICIADO || process.env.DD_SEM_REINICIO) return !1;
+  let limiteMb = (await import("v8")).getHeapStatistics().heap_size_limit / 1048576, alvo = Number(process.env.DD_MEMORIA_MB) || 10240, totalMb = (await import("os")).totalmem() / 1048576, desejado = Math.min(alvo, Math.floor(totalMb * 0.75));
+  if (limiteMb >= Math.min(6144, desejado)) return !1;
+  let { spawn } = await import("child_process");
+  console.log(`Mem\xF3ria de trabalho: ${Math.round(limiteMb)} MB \u2192 reiniciando com ${desejado} MB`);
+  let filho = spawn(process.execPath, [`--max-old-space-size=${desejado}`, ...process.execArgv, ...process.argv.slice(1)], { stdio: "inherit", env: { ...process.env, DD_REINICIADO: "1" } });
+  for (let sinal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(sinal, () => {
+    try {
+      filho.kill(sinal);
+    } catch {
+    }
+  });
+  let codigo = await new Promise((r) => filho.on("exit", (c, sinal) => r(c ?? (sinal ? 1 : 0))));
+  return process.exitCode = codigo, !0;
+}
 async function cli() {
+  if (await garantirMemoria()) return;
   console.log(`DataDash \xB7 automa\xE7\xE3o vers\xE3o ${VERSAO_AUTOMACAO}`), configurarConexoes();
   let args = process.argv.slice(2), val = (k) => {
     let i = args.indexOf(k);
@@ -30919,7 +31320,36 @@ async function cli() {
   }
   let github = !has("--sem-issues") && process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY ? { repo: process.env.GITHUB_REPOSITORY, token: process.env.GITHUB_TOKEN } : null, prazoTxt = val("--prazo-minutos") || process.env.DD_PRAZO_MINUTOS, prazoMinutos = prazoTxt && Number(prazoTxt) > 0 ? Math.min(Number(prazoTxt), 340) : void 0;
   prazoMinutos && console.log(`Tempo de coleta desta execu\xE7\xE3o: at\xE9 ${prazoMinutos} minutos`);
-  let r = await executar({ dados, forcar: has("--forcar"), fonte: val("--fonte"), semPublicar: has("--sem-publicar"), prazoMinutos }, { fetcher: fetchPadrao, firebase, github, appDir });
+  let interna = val("--interno-fonte");
+  if (interna) {
+    let agoraTxt = val("--agora");
+    await executar({ dados, forcar: has("--forcar"), fonte: interna, somenteColeta: !0, resultadoEm: val("--resultado"), prazoMinutos, ...agoraTxt ? { agora: new Date(agoraTxt) } : {} }, { fetcher: fetchPadrao, firebase, github: null, appDir });
+    return;
+  }
+  let filhoAtual = null;
+  for (let sinal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(sinal, () => {
+    try {
+      filhoAtual?.kill(sinal);
+    } catch {
+    }
+  });
+  let isolar = process.env.DD_SEM_ISOLAMENTO ? void 0 : async (f, o) => {
+    let { spawn } = await import("child_process"), { tmpdir } = await import("os"), arqResultado = join5(tmpdir(), `datadash-resultado-${f.id}-${process.pid}.json`);
+    try {
+      (await import("fs")).rmSync(arqResultado, { force: !0 });
+    } catch {
+    }
+    let args2 = [...process.execArgv, process.argv[1], "--dados", dados, "--interno-fonte", f.id, "--resultado", arqResultado, "--agora", o.agora, "--prazo-minutos", String(o.prazoMs / 6e4), ...o.forcar ? ["--forcar"] : []];
+    filhoAtual = spawn(process.execPath, args2, { stdio: "inherit", env: { ...process.env, DD_REINICIADO: "1" } });
+    let codigo = await new Promise((r2) => filhoAtual.on("exit", (c, sinal) => r2(c ?? (sinal === "SIGABRT" ? 134 : 1))));
+    filhoAtual = null;
+    let resultado;
+    try {
+      resultado = JSON.parse(readFileSync5(arqResultado, "utf-8"));
+    } catch {
+    }
+    return { codigo, resultado };
+  }, r = await executar({ dados, forcar: has("--forcar"), fonte: val("--fonte"), semPublicar: has("--sem-publicar"), prazoMinutos }, { fetcher: fetchPadrao, firebase, github, appDir, isolar });
   comFirebase || (r.resumo += "\n\n_Modo simplificado (sem Firebase): as bases do app se atualizam quando o app l\xEA o JSON de `final/`. Para o modo completo, configure os segredos do Firebase (ver README)._"), console.log(r.resumo), process.env.GITHUB_STEP_SUMMARY && appendFileSync(process.env.GITHUB_STEP_SUMMARY, r.resumo + `
 `), process.env.GITHUB_OUTPUT && appendFileSync(process.env.GITHUB_OUTPUT, `site_mudou=${r.siteMudou}
 `);
