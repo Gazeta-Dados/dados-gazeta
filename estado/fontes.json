@@ -279,5 +279,11 @@
     "hash": "7f68a7ad51a87b5477bee525716699c8d0d2b91c63cec346ce2c904c6395aa55",
     "ultimaNovidade": "2026-10-24T09:48:42.871Z",
     "avisos": []
+  },
+  "exportacoes-do-es-por-produto-e-porto-comex": {
+    "partes": {},
+    "ultimaVerificacao": "2026-10-24T21:26:59.877Z",
+    "ultimoErro": "não foi possível conectar ao endereço (CERT_HAS_EXPIRED)",
+    "ultimoErroEm": "2026-10-24T21:26:59.877Z"
   }
 }
