@@ -42,10 +42,10 @@
       "receitas-2026-csv": {
         "hash": "2733758977cadfd90fe46a139a1e6cb46bd74ecf8fc9a8b573784530cd307acd",
         "atualizadoEm": "2026-10-23T08:37:54.964134",
-        "verificadoEm": "2026-10-24T00:06:43.423Z"
+        "verificadoEm": "2026-10-24T09:48:42.871Z"
       }
     },
-    "ultimaVerificacao": "2026-10-24T00:06:43.423Z",
+    "ultimaVerificacao": "2026-10-24T09:48:42.871Z",
     "hash": "f59864ee8aeef594fa2b8ebce36d33caef30ad3b9f555fd76a22a8fd501cce52",
     "ultimaNovidade": "2026-10-23T17:46:51.167Z",
     "avisos": []
@@ -122,9 +122,9 @@
   },
   "municipios-do-es-ibge": {
     "partes": {},
-    "ultimaVerificacao": "2026-10-24T00:06:43.423Z",
+    "ultimaVerificacao": "2026-10-24T09:48:42.871Z",
     "ultimoErro": "o servidor não aceitou a conexão em 60 segundos (UND_ERR_CONNECT_TIMEOUT): pode estar fora do ar, sobrecarregado ou bloqueando acessos de fora do Brasil (o robô do GitHub roda fora do país)",
-    "ultimoErroEm": "2026-10-24T00:06:43.423Z"
+    "ultimoErroEm": "2026-10-24T09:48:42.871Z"
   },
   "receitas-municipios": {
     "partes": {
@@ -253,10 +253,31 @@
         "hash": "a8a82e4587f6ad64258f201d1cb60214c5b3679399ddbdceb3e1b07699834a47",
         "atualizadoEm": "2026-10-18T00:54:28.611221",
         "verificadoEm": "2026-10-24T00:06:43.423Z"
+      },
+      "despesas-2024-2semestre-csv": {
+        "hash": "7a73e8680408c070776ecdc0ea1acccfe9aa94d8ce8ae76fac029837bb7fe229",
+        "atualizadoEm": "2026-05-22T01:29:28.728544",
+        "verificadoEm": "2026-10-24T09:48:42.871Z"
+      },
+      "despesas-2024-1semestre-csv": {
+        "hash": "9cd85a7b233d9d799150428f40e25f0c2dade91d64d410f3a8a31554daccd34f",
+        "atualizadoEm": "2026-05-22T01:29:18.820855",
+        "verificadoEm": "2026-10-24T09:48:42.871Z"
+      },
+      "despesas-2025-csv": {
+        "hash": "3fd223511399d16736def8c549f688baf4894f392f86508b896f860ddac7d60f",
+        "atualizadoEm": "2026-10-18T03:00:38.037862",
+        "verificadoEm": "2026-10-24T09:48:42.871Z"
+      },
+      "despesas-2026-csv": {
+        "hash": "3c8d362ddaae5e41509c01c6718b97f56f57212f771f4746709d53fcb2daade2",
+        "atualizadoEm": "2026-10-23T12:36:35.191601",
+        "verificadoEm": "2026-10-24T09:48:42.871Z"
       }
     },
-    "ultimaVerificacao": "2026-10-24T00:06:43.423Z",
-    "ultimoErro": "a coleta desta fonte parou de forma inesperada (código 134): falta de memória; as outras fontes seguiram normalmente",
-    "ultimoErroEm": "2026-10-24T00:06:43.423Z"
+    "ultimaVerificacao": "2026-10-24T09:48:42.871Z",
+    "hash": "7f68a7ad51a87b5477bee525716699c8d0d2b91c63cec346ce2c904c6395aa55",
+    "ultimaNovidade": "2026-10-24T09:48:42.871Z",
+    "avisos": []
   }
 }
